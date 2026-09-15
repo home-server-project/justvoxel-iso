@@ -1,250 +1,278 @@
 # JustVoxel ISO Builder
 
-Build a lightweight unattended installer ISO for [JustVoxel](https://github.com/home-server-project/justvoxel), the Home Server Project's immutable Minecraft server appliance.
+JustVoxel ISO Builder creates unattended installation media for [JustVoxel](https://github.com/home-server-project/justvoxel), the Home Server Project's immutable server appliance for running and managing a separate Minecraft server workload.
 
-> **Development status:** this repository is being prepared as the JustVoxel ISO factory. The intended design follows the proven Pasiv Black Box ISO-builder approach: a short-lived bootc installer ISO built in GitHub Actions, without a desktop environment or full graphical interactive installer.
+> **Development status:** the installer is under active development on the `testing` branch. Current builds install JustVoxel `:testing` images and are intended for VM and hardware validation before stable release.
 
-The final builder will let the administrator choose between the two JustVoxel appliance images:
+## What this repository does
 
-- **VM — Virtual machine / hypervisor**
-- **Bare Metal — Physical hardware**
+This repository builds the installer ISO. It is not the source of the JustVoxel operating-system image itself.
 
-The installed operating system comes from the selected JustVoxel bootc image. This repository is an installer factory, not the source of the JustVoxel operating-system image itself.
+The installer places one selected JustVoxel bootc image directly onto the target disk:
 
-## Planned image targets
+- **JustVoxel VM** — for virtual machines and hypervisors
+- **JustVoxel Bare Metal** — for physical hardware
 
-Stable installer builds are intended to install one of:
+The installed system is JustVoxel from the first boot. There is no general-purpose Linux installation followed by a conversion step.
 
-```text
-ghcr.io/home-server-project/justvoxel-vm:10
-ghcr.io/home-server-project/justvoxel-baremetal:10
-```
+The installer installs the JustVoxel operating system only. It does **not** contain Minecraft server binaries, Mojang server software, a pre-created world, or pre-accepted Minecraft EULA state. The separate Paper-based Minecraft server workload is configured and deployed later through JustVoxel setup.
 
-Development testing uses the corresponding `:testing` images.
+## Before you start
 
-The ISO workflow is planned to resolve the selected moving tag to an immutable digest, verify the selected JustVoxel image with the project Cosign public key, embed that exact image content into the installer, and preserve the selected tag as the installed system's future bootc update tracking reference.
+You should be comfortable with basic computer tasks such as creating a VM or bootable USB, choosing a disk, finding a machine's IP address, and following installation instructions.
 
-## Installation model
+You do not need deep Linux administration knowledge to use JustVoxel.
 
-JustVoxel deliberately uses a simple unattended installer rather than a desktop-based graphical installer.
+### Current platform target
 
-The planned installer remains UEFI/x86_64 oriented and uses a simple GPT layout:
+The current installer is designed for:
 
-| Mount point | Filesystem | Default |
-| --- | --- | ---: |
-| `/boot/efi` | EFI System Partition | 512 MiB |
-| `/boot` | XFS | 1 GiB |
-| `/` | XFS | minimum 32 GiB, grows by default |
-| swap | none | not created |
+- x86_64 / amd64 systems
+- UEFI boot
+- a dedicated installation disk that may be erased
+- VM or Bare Metal installation
 
-The installer does not create disk swap. The installed JustVoxel appliance uses zram as a memory-pressure safety buffer instead, with `zram-generator`'s built-in `min(RAM / 2, 4096 MiB)` sizing policy.
+## Recommended hardware
 
-The root filesystem grows to use the remaining installation disk by default. A future workflow option will retain the ability to disable root growth, leaving unused disk space unallocated for an administrator who deliberately wants to create another partition later with JustVoxel storage tooling.
-
-## Why the root minimum is 32 GiB
-
-The 32 GiB root minimum is an **appliance-system minimum**, not a statement that every Minecraft world will fit comfortably inside 32 GiB forever.
-
-JustVoxel needs room for more than one static OS image. A healthy bootc lifecycle may temporarily involve:
-
-- the currently booted deployment
-- the previous deployment retained for rollback
-- a newer deployment staged for the next boot
-- changed image content downloaded while an update is prepared
-
-Bootc deployments share unchanged content, so this does not mean three complete independent copies of the operating system. The appliance still needs enough free space for larger AlmaLinux/JustVoxel updates and staging operations.
-
-Root storage also holds normal appliance state such as:
-
-- Podman image storage
-- the active Minecraft container image
-- one previous Minecraft container image retained by JustVoxel for rollback safety
-- Paper/plugins and runtime files
-- logs and normal `/var` state
-- temporary update/import working space
-- Minecraft persistent data when the administrator chooses to keep the world on the system filesystem
-
-For that reason, the project currently treats **32 GiB root as the minimum safe design target**, with additional space strongly preferred.
-
-## VM disk recommendation
-
-For a VM, the current recommendation is:
-
-- **40 GiB primary virtual disk or larger**
-- **one additional virtual disk for backups**
-
-The second virtual disk is the recommended backup layout because it is simple, portable across hypervisors, and keeps the backup target separate from the primary virtual disk.
-
-NFS and SMB/CIFS backup targets are also supported by the JustVoxel VM image.
-
-A thin-provisioned 40 GiB virtual disk does not necessarily consume 40 GiB of physical storage immediately on the hypervisor.
-
-For a very small test VM, smaller storage may technically boot, but it is not the supported design target because it leaves too little working room for bootc updates, retained deployments, container images, logs, and Minecraft data.
-
-## Bare Metal storage recommendation
-
-For Bare Metal, **32 GiB root remains the minimum design target**, but larger system storage is preferable.
-
-A 64 GB or larger system device provides more comfortable room when Minecraft data also stays on the OS disk. A 128 GB or larger SSD/NVMe gives considerably more flexibility for world growth, bootc updates, and future storage layout choices.
-
-JustVoxel can also place Minecraft persistent data on separate local storage and can use separate internal storage, USB storage, NFS, or SMB/CIFS for backups.
-
-## Minecraft world size is not fixed
-
-Minecraft storage use is workload-dependent.
-
-A new small family server may use relatively little persistent storage, but world data grows as players explore new terrain. More players, longer server lifetime, large exploration distances, additional dimensions, plugins, generated maps, and other server-side data can all increase the persistent-data footprint.
-
-Because of that, JustVoxel **cannot promise that a 32 GiB root filesystem will remain sufficient for the Minecraft world itself**.
-
-The 32 GiB number is intended to give the appliance operating system, bootc deployments, Podman, and a modest Minecraft installation enough operating room. It is not a maximum-world-size recommendation.
-
-Administrators expecting a long-lived or heavily explored world should use a larger system disk or place Minecraft persistent data on separate storage.
-
-## Backup storage is separate from world storage
-
-Minecraft data and Minecraft backups are independent storage choices.
-
-For VM, the preferred layout is:
-
-- primary virtual disk — JustVoxel OS and Minecraft data
-- secondary virtual disk — Minecraft backups
-
-For Bare Metal, backup targets may include:
-
-- another internal disk
-- an external USB disk or USB stick
-- an existing dedicated partition
-- a new partition created from already-unallocated space
-- NFS
-- SMB/CIFS
-- a normal directory on the system filesystem
-
-A backup partition on the same physical disk can help with some reinstall or configuration mistakes, but it does not protect against failure of that physical disk. A separate disk, USB device, second virtual disk with independent hypervisor protection, or network share gives a stronger failure boundary.
-
-## Practical CPU and memory guidance
-
-JustVoxel is lightweight as an operating-system appliance, but Minecraft itself benefits from decent CPU performance and enough RAM.
-
-These values are **practical project guidance**, not hard protocol limits, and will be refined during VM and Bare Metal validation.
+JustVoxel itself is lightweight, but the separate Minecraft server workload benefits from reasonable CPU, RAM, and fast storage.
 
 ### Memory
 
 - **Minimum recommended:** 8 GiB RAM
-- **Recommended for normal performance:** 12–16 GiB RAM
+- **Recommended for normal use:** 12–16 GiB RAM
 
-Systems below 8 GiB are not blocked. JustVoxel may still run on smaller compatible hardware, but performance can be limited depending on world size, plugins, player count, view/simulation distance, Geyser/Floodgate cross-play, and other workload characteristics.
+Systems below 8 GiB are not deliberately blocked, but Minecraft performance may be limited depending on player count, world size, plugins, view distance, simulation distance, cross-play, and other workload choices.
 
-Zram does not change these physical-RAM recommendations. A machine with 4 GiB physical RAM and approximately 2 GiB zram is still treated as a 4 GiB system by `mjust setup`.
+### CPU
 
-With 8 GiB host RAM, the current JustVoxel setup logic suggests approximately a 4 GiB Minecraft Java heap and 6 GiB total Minecraft-container memory limit.
+A sensible starting point is a modern x86_64 CPU with about 4 available CPU threads or vCPUs.
 
-With 16 GiB host RAM, current JustVoxel setup logic suggests approximately a 6 GiB Minecraft Java heap and 8 GiB total Minecraft-container memory limit.
+Minecraft benefits strongly from good single-thread CPU performance. More players, plugins, world generation, and cross-play may benefit from additional CPU resources.
 
-### CPU and storage
+### Storage
 
-A sensible family-server starting point is:
+The installer requires at least a 32 GiB root filesystem.
 
-- modern x86_64 CPU
-- **4 vCPU / CPU threads available to the VM or appliance**
-- fast SSD/NVMe storage preferred for the Minecraft world
+For a VM, the current recommendation is:
 
-For several players, plugins, cross-play, exploration, backups, and normal maintenance, strong single-thread CPU performance and 4–6 or more available CPU threads are preferable.
+- 40 GiB primary virtual disk or larger
+- a second virtual disk for backups after installation, or network backup storage
 
-More CPU/RAM does not replace the need for sensible Minecraft configuration. Server view distance, simulation distance, plugins, world generation, and player behavior can materially change resource use.
+For Bare Metal, 64 GB or larger system storage is more comfortable, and 128 GB or larger SSD/NVMe storage gives more room if Minecraft data will also remain on the system disk.
 
-## VM versus Bare Metal
+The 32 GiB minimum is an appliance-system minimum, not a guarantee that every long-lived Minecraft world will fit on the system disk forever.
 
-Choose **VM — Virtual machine / hypervisor** for environments such as:
+For the technical reasoning behind the disk layout and minimum, see [`docs/INSTALLER-DESIGN.md`](docs/INSTALLER-DESIGN.md).
+
+## Choose VM or Bare Metal
+
+Choose **VM** when JustVoxel will run inside a hypervisor such as:
 
 - KVM/libvirt
 - Proxmox
 - VMware
 - Hyper-V
 - VirtualBox
-- similar hypervisors
+- similar virtual-machine platforms
 
-The VM image contains the Minecraft appliance core plus lightweight guest integration and intentionally excludes physical-hardware administration packages that do not make sense inside a VM.
+Choose **Bare Metal** when JustVoxel will be installed directly on a physical computer.
 
-Choose **Bare Metal — Physical hardware** when JustVoxel is installed directly on a physical machine.
+Both variants use the same core appliance and the same normal JustVoxel management experience. Bare Metal adds physical-machine administration support that is unnecessary inside a VM.
 
-The Bare Metal image adds physical-machine administration support including SMART/NVMe tooling, sensors, NUT, USB/PCI diagnostics, firmware tooling, Wi-Fi/firmware support, CPU microcode support, hdparm, and related utilities.
+## Decide how you will log in
 
-## Planned default identity
+The current installer workflow supports:
 
-The planned unattended installer defaults are:
+- temporary password login
+- SSH public-key login
+- both password and SSH public-key login
+
+The workflow refuses to build an installer with no usable login method.
+
+The installed administrative user is:
 
 ```text
-hostname: justvoxel
-user:     voxel
-groups:   wheel
+voxel
 ```
 
-Root login remains locked.
+If password login is enabled in the current development workflow, the temporary default password is also `voxel`. Change it after the first successful boot.
 
-The ISO-builder workflow is planned to retain the same access model proven by the Pasiv Black Box builder:
+SSH is recommended for normal remote administration. If you do not already know how SSH keys work, use the beginner guide:
 
-- temporary default password login may be enabled
-- SSH public-key login may be injected from a repository secret
-- the workflow must reject a configuration that would create no usable login method
+[`docs/SSH.md`](docs/SSH.md)
 
-The default password, when enabled, is intended only for first access and should be changed immediately after the first successful boot.
+Only a public SSH key belongs in the builder. Never upload your private SSH key.
 
-## Destructive installer model
+## Build the installer ISO
 
-The planned installer intentionally keeps the same simple safety model as the Pasiv Black Box ISO builder.
+The current development workflow is **Build JustVoxel installer ISO** under GitHub Actions.
 
-For a VM, create the VM initially with **one blank installation disk**. Add the backup virtual disk after the operating-system installation if desired.
+For project testing, run the workflow from the `testing` branch.
 
-For Bare Metal, the safest installation procedure is to disconnect every non-target storage device before booting the unattended ISO.
+If you are using your own fork or repository copy, enable GitHub Actions if GitHub asks you to do so first.
 
-This avoids asking the installer to guess which of several disks contains data that must be preserved.
+Before running the workflow, add the `SSH_PUBLIC_KEY` repository secret only if you want the ISO to install your SSH public key.
 
-After JustVoxel is installed and verified, additional storage can be attached/reconnected and managed through `mjust`.
+Then open the workflow and choose the installation options.
 
-## Planned ISO-builder options
+Important choices include:
 
-The builder is intended to keep the useful controls from the Pasiv Black Box ISO project while adding JustVoxel image selection.
-
-Planned workflow options include:
-
-- **Install target:** VM or Bare Metal
-- verify selected image signature
-- enable/disable temporary password login
-- optional SSH public key from repository secret
+- VM or Bare Metal target
+- image signature verification
+- password login on or off
+- SSH-key installation on or off
 - timezone
 - keyboard layout
 - EFI partition size
-- `/boot` partition size
-- root minimum size
-- grow root to remaining disk space
+- `/boot` size
+- root size
+- whether root grows to fill remaining disk space
 
-The installer should stay intentionally simple. Advanced storage design belongs to the installed JustVoxel appliance and `mjust`, not to a large graphical installer environment.
+For most users, the defaults are the correct starting point.
 
-## Short-lived ISO artifacts
+The development workflow currently resolves and installs the corresponding JustVoxel `:testing` image.
 
-The intended builder behavior is to produce the installer ISO and `SHA256SUMS` as a short-lived GitHub Actions artifact.
+## Download the finished ISO
 
-The ISO repository is an **ISO factory, not a permanent ISO archive**. The planned artifact-retention policy is one day; when an artifact expires, the correct workflow is to build a fresh ISO containing the current verified JustVoxel image.
+When the workflow succeeds, download the GitHub Actions artifact for the selected target.
 
-## Planned artifact names
+Current artifact names are:
 
-The selected target should be obvious from the downloaded file:
+```text
+justvoxel-vm-installer
+justvoxel-baremetal-installer
+```
+
+The artifact contains the installer ISO and a SHA256 checksum file.
+
+The ISO itself is named:
 
 ```text
 justvoxel-vm-installer.iso
 justvoxel-baremetal-installer.iso
 ```
 
-The workflow summary should also report the selected variant, exact embedded image digest, bootc tracking reference, partition settings, and login method.
+Artifacts are retained for **1 day**. If the artifact has expired, build a fresh ISO rather than treating this repository as a permanent ISO archive.
 
-## Project repositories
+## Installation warning
 
-- [JustVoxel](https://github.com/home-server-project/justvoxel) — appliance images, Minecraft runtime, `mjust`, storage and management logic
-- [JustVoxel ISO Builder](https://github.com/home-server-project/justvoxel-iso) — lightweight installer ISO factory
+The installer is destructive to the selected installation disk.
 
-The ISO Builder is intended to become a GitHub template repository so users can create their own builder repository, configure an SSH public-key secret if desired, and build a personal JustVoxel installer without maintaining an ISO locally.
+Anything on that target disk may be lost.
 
-## Current next step
+For a VM, the safest starting layout is one blank virtual disk for the operating-system installation. Add a second virtual disk for backups after JustVoxel is installed if you want that layout.
 
-Before the ISO workflow itself is treated as ready, the existing JustVoxel VM image and storage/migration flows should be validated in disposable VMs. The ISO builder can then be implemented against behavior that has already been proven rather than assumptions about the appliance.
+For Bare Metal, disconnect non-target storage devices before installation whenever practical. This reduces the chance of selecting or exposing a disk that contains data you want to keep.
+
+Keep backups of anything important before installing an operating system.
+
+## Install in a VM
+
+A simple VM installation flow is:
+
+1. Create a new x86_64 UEFI virtual machine.
+2. Give it at least 8 GiB RAM for a realistic JustVoxel test or deployment.
+3. Give it about 4 vCPUs as a practical starting point.
+4. Create one blank 40 GiB or larger primary virtual disk.
+5. Attach the JustVoxel VM installer ISO.
+6. Boot from the ISO.
+7. Allow the unattended installation to complete.
+8. Power off or reboot as instructed by the installer environment.
+9. Detach the installer ISO so the VM boots from its installed disk.
+10. Add a separate backup virtual disk afterward if desired.
+
+After the installed system boots, connect to JustVoxel and continue with first setup.
+
+## Install on physical hardware
+
+A simple Bare Metal installation flow is:
+
+1. Back up any important data from the target computer.
+2. Disconnect non-target storage devices whenever practical.
+3. Write the Bare Metal installer ISO to a USB drive with a normal ISO-writing tool.
+4. Boot the machine from that USB drive in UEFI mode.
+5. Allow the unattended installation to complete.
+6. Remove the installer USB before the installed system boots again if necessary.
+7. Reconnect additional storage only after the JustVoxel operating system has been installed and verified.
+
+Additional storage can then be configured through JustVoxel rather than through a complicated installer storage screen.
+
+## First boot
+
+After installation, let JustVoxel boot from its system disk.
+
+Find the appliance IP address from your router, hypervisor, DHCP server, or local console.
+
+If you installed an SSH key, connect with:
+
+```text
+ssh voxel@SERVER_IP
+```
+
+If you used the temporary development password, log in as `voxel` and change that password after first access.
+
+Then run:
+
+```text
+mjust
+```
+
+The interactive JustVoxel interface will guide you through appliance setup and normal administration.
+
+Minecraft/Paper is still a separate workload at this point. It is not preinstalled as Minecraft server binaries in the JustVoxel OS image. The active server workload is created later through the JustVoxel setup flow after the administrator accepts the Minecraft EULA.
+
+## Storage after installation
+
+Installation and application storage are deliberately separate concerns.
+
+The installer creates the JustVoxel system disk. After installation, `mjust` can manage supported storage choices for Minecraft data and backups, including supported local storage and NFS/SMB network targets.
+
+For normal storage administration, use the main JustVoxel documentation:
+
+[JustVoxel storage guide](https://github.com/home-server-project/justvoxel/blob/testing/docs/STORAGE.md)
+
+## Why the installer stays simple
+
+The installer is meant to answer one question safely: how do I get JustVoxel onto this VM or physical computer?
+
+It does not try to become a full storage-management environment or a general-purpose Linux installer.
+
+Advanced storage layout, Minecraft data placement, backup targets, migration, server configuration, and operating-system maintenance belong to the installed JustVoxel appliance and `mjust`.
+
+That keeps installation easier to understand and keeps day-to-day administration in one place after the machine is running.
+
+## Technical installer details
+
+Normal users do not need to understand how the ISO is assembled.
+
+Maintainers and advanced users can read [`docs/INSTALLER-DESIGN.md`](docs/INSTALLER-DESIGN.md) for:
+
+- bootc image resolution and tracking
+- Cosign verification
+- bootc-image-builder behavior
+- installer-container design
+- partition-layout reasoning
+- access validation
+- artifact behavior
+- the separation between installation media, the JustVoxel OS image, and the later Minecraft workload
+
+## Project documentation
+
+- [JustVoxel](https://github.com/home-server-project/justvoxel) — appliance overview and source
+- [JustVoxel mjust guide](https://github.com/home-server-project/justvoxel/blob/testing/docs/MJUST.md) — appliance administration
+- [JustVoxel architecture](https://github.com/home-server-project/justvoxel/blob/testing/docs/ARCHITECTURE.md) — why the system is built this way
+- [`docs/SSH.md`](docs/SSH.md) — create and use an SSH key
+- [`docs/INSTALLER-DESIGN.md`](docs/INSTALLER-DESIGN.md) — installer internals and design reasoning
+
+## Development and stable channels
+
+Current ISO development uses JustVoxel `:testing` images.
+
+Stable installer media is intended to use:
+
+```text
+ghcr.io/home-server-project/justvoxel-vm:10
+ghcr.io/home-server-project/justvoxel-baremetal:10
+```
+
+Stable use should wait for the JustVoxel images and installer path to complete validation and promotion.
