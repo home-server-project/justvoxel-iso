@@ -37,6 +37,8 @@ The planned installer remains UEFI/x86_64 oriented and uses a simple GPT layout:
 | `/` | XFS | minimum 32 GiB, grows by default |
 | swap | none | not created |
 
+The installer does not create disk swap. The installed JustVoxel appliance uses zram as a memory-pressure safety buffer instead, with `zram-generator`'s built-in `min(RAM / 2, 4096 MiB)` sizing policy.
+
 The root filesystem grows to use the remaining installation disk by default. A future workflow option will retain the ability to disable root growth, leaving unused disk space unallocated for an administrator who deliberately wants to create another partition later with JustVoxel storage tooling.
 
 ## Why the root minimum is 32 GiB
@@ -126,27 +128,28 @@ JustVoxel is lightweight as an operating-system appliance, but Minecraft itself 
 
 These values are **practical project guidance**, not hard protocol limits, and will be refined during VM and Bare Metal validation.
 
-### Small family server
+### Memory
 
-A sensible starting point is:
+- **Minimum recommended:** 8 GiB RAM
+- **Recommended for normal performance:** 12–16 GiB RAM
+
+Systems below 8 GiB are not blocked. JustVoxel may still run on smaller compatible hardware, but performance can be limited depending on world size, plugins, player count, view/simulation distance, Geyser/Floodgate cross-play, and other workload characteristics.
+
+Zram does not change these physical-RAM recommendations. A machine with 4 GiB physical RAM and approximately 2 GiB zram is still treated as a 4 GiB system by `mjust setup`.
+
+With 8 GiB host RAM, the current JustVoxel setup logic suggests approximately a 4 GiB Minecraft Java heap and 6 GiB total Minecraft-container memory limit.
+
+With 16 GiB host RAM, current JustVoxel setup logic suggests approximately a 6 GiB Minecraft Java heap and 8 GiB total Minecraft-container memory limit.
+
+### CPU and storage
+
+A sensible family-server starting point is:
 
 - modern x86_64 CPU
 - **4 vCPU / CPU threads available to the VM or appliance**
-- **8 GiB RAM minimum practical target**
 - fast SSD/NVMe storage preferred for the Minecraft world
 
-With 8 GiB host RAM, the current JustVoxel setup logic suggests approximately a 4 GiB Java heap and 6 GiB Minecraft-container memory limit.
-
-### Recommended comfortable target
-
-For a server expected to handle several players, plugins, cross-play, exploration, backups, and normal maintenance comfortably:
-
-- modern CPU with strong single-thread performance
-- **4-6 or more CPU threads available**
-- **16 GiB RAM**
-- SSD/NVMe-backed Minecraft data
-
-With 16 GiB host RAM, current JustVoxel setup logic suggests approximately a 6 GiB Java heap and 8 GiB Minecraft-container memory limit.
+For several players, plugins, cross-play, exploration, backups, and normal maintenance, strong single-thread CPU performance and 4–6 or more available CPU threads are preferable.
 
 More CPU/RAM does not replace the need for sensible Minecraft configuration. Server view distance, simulation distance, plugins, world generation, and player behavior can materially change resource use.
 
