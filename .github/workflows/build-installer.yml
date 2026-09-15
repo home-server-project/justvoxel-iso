@@ -1,0 +1,550 @@
+---
+name: Build JustVoxel installer ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      install_target:
+        description: JustVoxel image to install
+        required: true
+        default: VM - Virtual machine / hypervisor
+        type: choice
+        options:
+          - VM - Virtual machine / hypervisor
+          - Bare Metal - Physical hardware
+      verify_signature:
+        description: Verify the selected JustVoxel image with cosign.pub
+        required: true
+        default: true
+        type: boolean
+      enable_password_login:
+        description: Enable voxel password login (default password voxel)
+        required: true
+        default: true
+        type: boolean
+      install_ssh_key:
+        description: Install SSH public key from SSH_PUBLIC_KEY secret
+        required: true
+        default: false
+        type: boolean
+      timezone:
+        description: IANA timezone, for example America/Toronto or Europe/Warsaw
+        required: true
+        default: America/Toronto
+        type: string
+      keyboard_layout:
+        description: Linux keyboard layout/keymap, for example us, ca, fr, de, or pl
+        required: true
+        default: us
+        type: string
+      efi_size_mib:
+        description: EFI partition size in MiB
+        required: true
+        default: '512'
+        type: string
+      boot_size_mib:
+        description: /boot partition size in MiB
+        required: true
+        default: '1024'
+        type: string
+      root_size_mib:
+        description: Root size in MiB (minimum when grow is ON)
+        required: true
+        default: '32768'
+        type: string
+      grow_root:
+        description: Grow root to use remaining disk space
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  BIB_IMAGE: quay.io/centos-bootc/bootc-image-builder:latest
+  INSTALLER_IMAGE: localhost/justvoxel-installer:10
+  # Development ISO builds intentionally use the current testing images.
+  # Change this to 10 only after the JustVoxel images are promoted to stable.
+  JUSTVOXEL_IMAGE_TAG: testing
+
+jobs:
+  build-installer:
+    name: Build unattended UEFI installer
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Resolve install target
+        id: target
+        shell: bash
+        env:
+          INSTALL_TARGET: ${{ inputs.install_target }}
+          IMAGE_TAG: ${{ env.JUSTVOXEL_IMAGE_TAG }}
+        run: |
+          set -euo pipefail
+
+          case "${INSTALL_TARGET}" in
+            'VM - Virtual machine / hypervisor')
+              variant='vm'
+              image="ghcr.io/home-server-project/justvoxel-vm:${IMAGE_TAG}"
+              ;;
+            'Bare Metal - Physical hardware')
+              variant='baremetal'
+              image="ghcr.io/home-server-project/justvoxel-baremetal:${IMAGE_TAG}"
+              ;;
+            *)
+              echo "ERROR: Unsupported install target: ${INSTALL_TARGET}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "variant=${variant}" >> "${GITHUB_OUTPUT}"
+          echo "bootc_image=${image}" >> "${GITHUB_OUTPUT}"
+          echo "Selected ${INSTALL_TARGET}: ${image}"
+
+      - name: Validate installer options
+        shell: bash
+        env:
+          ENABLE_PASSWORD_LOGIN: ${{ inputs.enable_password_login }}
+          INSTALL_SSH_KEY: ${{ inputs.install_ssh_key }}
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+          TIMEZONE: ${{ inputs.timezone }}
+          KEYBOARD_LAYOUT: ${{ inputs.keyboard_layout }}
+          EFI_SIZE_MIB: ${{ inputs.efi_size_mib }}
+          BOOT_SIZE_MIB: ${{ inputs.boot_size_mib }}
+          ROOT_SIZE_MIB: ${{ inputs.root_size_mib }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${ENABLE_PASSWORD_LOGIN}" != "true" && "${INSTALL_SSH_KEY}" != "true" ]]; then
+            echo 'ERROR: The installer would create no usable login method.'
+            echo 'Enable voxel password login, install an SSH public key, or enable both.'
+            exit 1
+          fi
+
+          if [[ "${INSTALL_SSH_KEY}" == "true" && -z "${SSH_PUBLIC_KEY:-}" ]]; then
+            echo 'ERROR: Install SSH public key is enabled, but repository secret SSH_PUBLIC_KEY is missing or empty.'
+            echo 'Add the public key under Settings -> Secrets and variables -> Actions, then run the workflow again.'
+            exit 1
+          fi
+
+          if [[ ! "${TIMEZONE}" =~ ^UTC$|^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)+$ ]]; then
+            echo "ERROR: Timezone must be an IANA name such as America/Toronto, Europe/Warsaw, or UTC. Received: ${TIMEZONE}"
+            exit 1
+          fi
+
+          if [[ ! "${KEYBOARD_LAYOUT}" =~ ^[A-Za-z0-9._+-]+$ ]]; then
+            echo "ERROR: Keyboard layout must be a Linux keymap name such as us, ca, fr, de, or pl. Received: ${KEYBOARD_LAYOUT}"
+            exit 1
+          fi
+
+          for entry in \
+            "EFI partition:${EFI_SIZE_MIB}" \
+            "/boot partition:${BOOT_SIZE_MIB}" \
+            "root partition:${ROOT_SIZE_MIB}"; do
+            label="${entry%%:*}"
+            value="${entry#*:}"
+            if [[ ! "${value}" =~ ^[0-9]+$ || "${value}" -le 0 ]]; then
+              echo "ERROR: ${label} size must be a positive whole number of MiB. Received: ${value}"
+              exit 1
+            fi
+          done
+
+          if (( ROOT_SIZE_MIB < 32768 )); then
+            echo 'ERROR: JustVoxel requires a root minimum of 32768 MiB (32 GiB).'
+            exit 1
+          fi
+
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
+        with:
+          remove-codeql: true
+
+      - name: Install verification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y jq skopeo openssh-client openssl
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: 'v3.1.2'
+
+      - name: Prepare installer runtime configuration
+        shell: bash
+        env:
+          ENABLE_PASSWORD_LOGIN: ${{ inputs.enable_password_login }}
+          INSTALL_SSH_KEY: ${{ inputs.install_ssh_key }}
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+          TIMEZONE: ${{ inputs.timezone }}
+          KEYBOARD_LAYOUT: ${{ inputs.keyboard_layout }}
+          EFI_SIZE_MIB: ${{ inputs.efi_size_mib }}
+          BOOT_SIZE_MIB: ${{ inputs.boot_size_mib }}
+          ROOT_SIZE_MIB: ${{ inputs.root_size_mib }}
+          GROW_ROOT: ${{ inputs.grow_root }}
+        run: |
+          set -euo pipefail
+
+          runtime_config="${PWD}/installer/runtime-iso.toml"
+          cp installer/iso.toml "${runtime_config}"
+
+          normalized_key=''
+          if [[ "${INSTALL_SSH_KEY}" == "true" ]]; then
+            key_file="${RUNNER_TEMP}/voxel-ssh-key.pub"
+            printf '%s\n' "${SSH_PUBLIC_KEY}" > "${key_file}"
+            ssh-keygen -l -f "${key_file}" >/dev/null
+
+            read -r key_type key_data _ < "${key_file}"
+            if [[ -z "${key_type:-}" || -z "${key_data:-}" ]]; then
+              echo 'ERROR: SSH_PUBLIC_KEY is not a complete OpenSSH public key.'
+              exit 1
+            fi
+            normalized_key="${key_type} ${key_data}"
+          fi
+
+          disabled_password_hash=''
+          if [[ "${ENABLE_PASSWORD_LOGIN}" != "true" ]]; then
+            random_password="$(openssl rand -base64 48)"
+            disabled_password_hash="$(printf '%s' "${random_password}" | openssl passwd -6 -stdin)"
+            unset random_password
+          fi
+
+          export RUNTIME_CONFIG="${runtime_config}"
+          export NORMALIZED_SSH_PUBLIC_KEY="${normalized_key}"
+          export DISABLED_PASSWORD_HASH="${disabled_password_hash}"
+          export TIMEZONE
+          export KEYBOARD_LAYOUT
+          export ENABLE_PASSWORD_LOGIN
+          export INSTALL_SSH_KEY
+          export EFI_SIZE_MIB
+          export BOOT_SIZE_MIB
+          export ROOT_SIZE_MIB
+          export GROW_ROOT
+
+          python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path(os.environ["RUNTIME_CONFIG"])
+          text = path.read_text()
+
+          user_pattern = re.compile(r'^user --name=voxel --groups=wheel(?: .*)?$', re.MULTILINE)
+          keyboard_pattern = re.compile(r'^keyboard --vckeymap=\S+ --xlayouts=\S+$', re.MULTILINE)
+          timezone_pattern = re.compile(r'^timezone \S+ --utc$', re.MULTILINE)
+          efi_pattern = re.compile(r'^part /boot/efi --fstype=efi --size=\d+$', re.MULTILINE)
+          boot_pattern = re.compile(r'^part /boot --fstype=xfs --size=\d+$', re.MULTILINE)
+          root_pattern = re.compile(r'^part / --fstype=xfs(?: --grow)? --size=\d+$', re.MULTILINE)
+
+          checks = {
+              "voxel user": user_pattern,
+              "keyboard": keyboard_pattern,
+              "timezone": timezone_pattern,
+              "EFI partition": efi_pattern,
+              "/boot partition": boot_pattern,
+              "root partition": root_pattern,
+          }
+          for label, pattern in checks.items():
+              if len(pattern.findall(text)) != 1:
+                  raise SystemExit(f"ERROR: installer/iso.toml must contain exactly one supported {label} line")
+
+          default_password_hash = "$6$0LPXGhsb5MOJ160J$K97FKtUs0SgIXum7OpGk69m.asoBR0Os86DpbUnes5JO27aV5XzfEgtpVb/Ff8RMKl.izzSgbqwK8XPpYRFV20"
+          password_enabled = os.environ["ENABLE_PASSWORD_LOGIN"] == "true"
+          ssh_enabled = os.environ["INSTALL_SSH_KEY"] == "true"
+
+          if password_enabled:
+              password_hash = default_password_hash
+          else:
+              password_hash = os.environ["DISABLED_PASSWORD_HASH"]
+              if not password_hash:
+                  raise SystemExit("ERROR: disabled password hash is empty")
+
+          user_line = f"user --name=voxel --groups=wheel --password={password_hash} --iscrypted"
+          text = user_pattern.sub(user_line, text, count=1)
+          text = re.sub(r'^sshkey --username=voxel .*\n?', '', text, flags=re.MULTILINE)
+
+          if ssh_enabled:
+              key = os.environ["NORMALIZED_SSH_PUBLIC_KEY"]
+              if not key:
+                  raise SystemExit("ERROR: normalized SSH public key is empty")
+              text = text.replace(
+                  user_line,
+                  f'{user_line}\nsshkey --username=voxel "{key}"',
+                  1,
+              )
+
+          timezone = os.environ["TIMEZONE"]
+          keyboard_layout = os.environ["KEYBOARD_LAYOUT"]
+          text = timezone_pattern.sub(f"timezone {timezone} --utc", text, count=1)
+          text = keyboard_pattern.sub(
+              f"keyboard --vckeymap={keyboard_layout} --xlayouts={keyboard_layout}",
+              text,
+              count=1,
+          )
+
+          efi_size = int(os.environ["EFI_SIZE_MIB"])
+          boot_size = int(os.environ["BOOT_SIZE_MIB"])
+          root_size = int(os.environ["ROOT_SIZE_MIB"])
+          grow_root = os.environ["GROW_ROOT"] == "true"
+
+          text = efi_pattern.sub(
+              f"part /boot/efi --fstype=efi --size={efi_size}",
+              text,
+              count=1,
+          )
+          text = boot_pattern.sub(
+              f"part /boot --fstype=xfs --size={boot_size}",
+              text,
+              count=1,
+          )
+          root_line = f"part / --fstype=xfs {'--grow ' if grow_root else ''}--size={root_size}"
+          text = root_pattern.sub(root_line, text, count=1)
+
+          path.write_text(text)
+          PY
+
+          echo 'Installer runtime configuration prepared successfully.'
+
+      - name: Resolve selected bootc image
+        id: source
+        shell: bash
+        env:
+          BOOTC_IMAGE: ${{ steps.target.outputs.bootc_image }}
+          VERIFY_SIGNATURE: ${{ inputs.verify_signature }}
+        run: |
+          set -euo pipefail
+
+          inspect="$(skopeo inspect \
+            --override-arch amd64 \
+            "docker://${BOOTC_IMAGE}")"
+
+          name="$(jq -r '.Name' <<<"${inspect}")"
+          digest="$(jq -r '.Digest' <<<"${inspect}")"
+
+          [[ -n "${name}" && "${name}" != "null" ]]
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]
+
+          immutable_ref="${name}@${digest}"
+          tracking_ref="${BOOTC_IMAGE}"
+
+          if [[ "${VERIFY_SIGNATURE}" == "true" ]]; then
+            cosign verify \
+              --new-bundle-format=false \
+              --key cosign.pub \
+              "${immutable_ref}" >/tmp/bootc-image-verify.json
+            jq -e 'length > 0' /tmp/bootc-image-verify.json >/dev/null
+            echo "Verified installer payload: ${immutable_ref}"
+          else
+            echo "WARNING: signature verification disabled for ${immutable_ref}"
+          fi
+
+          echo "name=${name}" >> "${GITHUB_OUTPUT}"
+          echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
+          echo "immutable_ref=${immutable_ref}" >> "${GITHUB_OUTPUT}"
+          echo "tracking_ref=${tracking_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare rootful Podman storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /var/lib/containers/storage
+          sudo mkdir -p /etc/containers
+          sudo tee /etc/containers/storage.conf >/dev/null <<'EOF'
+          [storage]
+          driver = "overlay"
+          runroot = "/run/containers/storage"
+          graphroot = "/var/lib/containers/storage"
+          EOF
+
+      - name: Build dedicated installer container
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo podman build \
+            --pull=always \
+            --file installer/Containerfile \
+            --tag "${INSTALLER_IMAGE}" \
+            .
+
+      - name: Validate timezone and keyboard against installer environment
+        shell: bash
+        env:
+          TIMEZONE: ${{ inputs.timezone }}
+          KEYBOARD_LAYOUT: ${{ inputs.keyboard_layout }}
+        run: |
+          set -euo pipefail
+
+          sudo podman run --rm \
+            --env "TIMEZONE=${TIMEZONE}" \
+            --env "KEYBOARD_LAYOUT=${KEYBOARD_LAYOUT}" \
+            --entrypoint /bin/bash \
+            "${INSTALLER_IMAGE}" \
+            -c '
+              set -euo pipefail
+
+              if [[ ! -f "/usr/share/zoneinfo/${TIMEZONE}" ]]; then
+                echo "ERROR: Unknown timezone in installer environment: ${TIMEZONE}" >&2
+                exit 1
+              fi
+
+              keymap_path="$(find /usr/lib/kbd/keymaps /usr/share/kbd/keymaps \
+                -type f \
+                \( -name "${KEYBOARD_LAYOUT}.map" \
+                   -o -name "${KEYBOARD_LAYOUT}.map.gz" \
+                   -o -name "${KEYBOARD_LAYOUT}.map.xz" \
+                   -o -name "${KEYBOARD_LAYOUT}.map.zst" \) \
+                -print -quit 2>/dev/null || true)"
+
+              if [[ -z "${keymap_path}" ]]; then
+                echo "ERROR: Unknown keyboard layout/keymap in installer environment: ${KEYBOARD_LAYOUT}" >&2
+                exit 1
+              fi
+
+              echo "Validated timezone: ${TIMEZONE}"
+              echo "Validated keyboard keymap: ${KEYBOARD_LAYOUT} (${keymap_path})"
+            '
+
+      - name: Pull verified payload and image builder
+        shell: bash
+        env:
+          IMMUTABLE_REF: ${{ steps.source.outputs.immutable_ref }}
+          TRACKING_REF: ${{ steps.source.outputs.tracking_ref }}
+        run: |
+          set -euo pipefail
+
+          sudo podman pull "${IMMUTABLE_REF}"
+
+          if [[ "${TRACKING_REF}" != "${IMMUTABLE_REF}" ]]; then
+            sudo podman tag "${IMMUTABLE_REF}" "${TRACKING_REF}"
+          fi
+
+          sudo podman pull "${BIB_IMAGE}"
+
+      - name: Build bootc installer ISO
+        shell: bash
+        env:
+          TRACKING_REF: ${{ steps.source.outputs.tracking_ref }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+
+          sudo podman run --rm \
+            --privileged \
+            --security-opt label=type:unconfined_t \
+            --volume /var/lib/containers/storage:/var/lib/containers/storage \
+            --volume "${PWD}/output:/output" \
+            --volume "${PWD}/installer/runtime-iso.toml:/config.toml:ro" \
+            "${BIB_IMAGE}" build \
+            --output /output \
+            --type bootc-installer \
+            --installer-payload-ref "${TRACKING_REF}" \
+            "${INSTALLER_IMAGE}"
+
+      - name: Prepare downloadable ISO
+        shell: bash
+        env:
+          VARIANT: ${{ steps.target.outputs.variant }}
+        run: |
+          set -euo pipefail
+
+          iso_path="$(find ./output -type f -name '*.iso' -print -quit)"
+          if [[ -z "${iso_path}" || ! -f "${iso_path}" ]]; then
+            echo 'Installer ISO was not produced.'
+            exit 1
+          fi
+
+          mkdir -p installer-artifact
+          output_name="justvoxel-${VARIANT}-installer.iso"
+          cp "${iso_path}" "installer-artifact/${output_name}"
+          (
+            cd installer-artifact
+            sha256sum "${output_name}" > SHA256SUMS
+          )
+
+      - name: Upload installer ISO
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: justvoxel-${{ steps.target.outputs.variant }}-installer
+          path: installer-artifact/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+      - name: Installer summary
+        shell: bash
+        env:
+          INSTALL_TARGET: ${{ inputs.install_target }}
+          VARIANT: ${{ steps.target.outputs.variant }}
+          SOURCE_NAME: ${{ steps.source.outputs.name }}
+          SOURCE_DIGEST: ${{ steps.source.outputs.digest }}
+          TRACKING_REF: ${{ steps.source.outputs.tracking_ref }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          ENABLE_PASSWORD_LOGIN: ${{ inputs.enable_password_login }}
+          INSTALL_SSH_KEY: ${{ inputs.install_ssh_key }}
+          TIMEZONE: ${{ inputs.timezone }}
+          KEYBOARD_LAYOUT: ${{ inputs.keyboard_layout }}
+          EFI_SIZE_MIB: ${{ inputs.efi_size_mib }}
+          BOOT_SIZE_MIB: ${{ inputs.boot_size_mib }}
+          ROOT_SIZE_MIB: ${{ inputs.root_size_mib }}
+          GROW_ROOT: ${{ inputs.grow_root }}
+        run: |
+          if [[ "${ENABLE_PASSWORD_LOGIN}" == "true" ]]; then
+            password_status='enabled (voxel / voxel)'
+          else
+            password_status='disabled; no known password'
+          fi
+
+          if [[ "${INSTALL_SSH_KEY}" == "true" ]]; then
+            ssh_status='installed for voxel'
+          else
+            ssh_status='not installed'
+          fi
+
+          if [[ "${GROW_ROOT}" == "true" ]]; then
+            root_status="minimum ${ROOT_SIZE_MIB} MiB, grows to use remaining disk space"
+          else
+            root_status="${ROOT_SIZE_MIB} MiB, does not grow; remaining disk space is left unallocated"
+          fi
+
+          {
+            echo "## JustVoxel ${VARIANT} installer ISO"
+            echo
+            echo "### [Download installer artifact](${ARTIFACT_URL})"
+            echo
+            echo '> The artifact expires after 1 day. Run this workflow again if it has expired.'
+            echo
+            echo "- Install target: ${INSTALL_TARGET}"
+            echo "- Source image: ${SOURCE_NAME}"
+            echo "- Installed payload digest: ${SOURCE_DIGEST}"
+            echo "- Bootc update tracking reference: ${TRACKING_REF}"
+            echo "- Signature verification: ${{ inputs.verify_signature }}"
+            echo "- voxel password login: ${password_status}"
+            echo "- SSH public key: ${ssh_status}"
+            echo "- Hostname: justvoxel"
+            echo "- Timezone: ${TIMEZONE}"
+            echo "- Keyboard layout/keymap: ${KEYBOARD_LAYOUT}"
+            echo '- Language: C.UTF-8'
+            echo '- voxel groups: wheel'
+            echo '- Root login: locked'
+            echo '- Installer type: bootc-installer with embedded Anaconda/Lorax environment'
+            echo '- Firmware target: UEFI x86_64'
+            echo '- Partition table: GPT'
+            echo "- EFI system partition: ${EFI_SIZE_MIB} MiB"
+            echo "- /boot: ${BOOT_SIZE_MIB} MiB XFS"
+            echo "- /: XFS, ${root_status}"
+            echo '- Swap: none'
+            echo
+            echo '> **DANGER:** Disconnect every non-target disk before using this unattended installer on physical hardware.'
+          } >> "${GITHUB_STEP_SUMMARY}"
