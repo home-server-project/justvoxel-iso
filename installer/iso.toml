@@ -1,0 +1,32 @@
+name = "justvoxel-installer"
+description = "Unattended UEFI installer for JustVoxel"
+version = "1"
+
+# DANGER: this installer is intentionally destructive.
+# For physical hardware, disconnect every non-target disk before booting it.
+# For a VM, present one blank target disk during installation.
+[customizations.installer.modules]
+enable = [
+  "org.fedoraproject.Anaconda.Modules.Localization",
+  "org.fedoraproject.Anaconda.Modules.Timezone",
+]
+
+[customizations.installer.kickstart]
+contents = """
+text --non-interactive
+lang C.UTF-8
+keyboard --vckeymap=us --xlayouts=us
+timezone America/Toronto --utc
+network --bootproto=dhcp --device=link --activate --onboot=on --hostname=justvoxel
+
+zerombr
+clearpart --all --initlabel --disklabel=gpt
+part /boot/efi --fstype=efi --size=512
+part /boot --fstype=xfs --size=1024
+part / --fstype=xfs --grow --size=32768
+
+rootpw --lock --iscrypted $6$0LPXGhsb5MOJ160J$K97FKtUs0SgIXum7OpGk69m.asoBR0Os86DpbUnes5JO27aV5XzfEgtpVb/Ff8RMKl.izzSgbqwK8XPpYRFV20
+user --name=voxel --groups=wheel --password=$6$0LPXGhsb5MOJ160J$K97FKtUs0SgIXum7OpGk69m.asoBR0Os86DpbUnes5JO27aV5XzfEgtpVb/Ff8RMKl.izzSgbqwK8XPpYRFV20 --iscrypted
+
+reboot --eject
+"""
