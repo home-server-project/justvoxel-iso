@@ -28,5 +28,13 @@ part / --fstype=xfs --grow --size=32768
 rootpw --lock --iscrypted $6$0LPXGhsb5MOJ160J$K97FKtUs0SgIXum7OpGk69m.asoBR0Os86DpbUnes5JO27aV5XzfEgtpVb/Ff8RMKl.izzSgbqwK8XPpYRFV20
 user --name=voxel --groups=wheel --password=$6$0LPXGhsb5MOJ160J$K97FKtUs0SgIXum7OpGk69m.asoBR0Os86DpbUnes5JO27aV5XzfEgtpVb/Ff8RMKl.izzSgbqwK8XPpYRFV20 --iscrypted
 
+%post --erroronfail
+# This installer alone owns the known voxel/voxel bootstrap credential. Expire
+# it so first authentication requires replacing the real Linux password. bootc
+# rebases and custom installation paths never run this Kickstart and are not
+# modified by this policy.
+chage -d 0 voxel
+%end
+
 reboot --eject
 """
