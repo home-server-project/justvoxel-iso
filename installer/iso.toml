@@ -28,6 +28,35 @@ part / --fstype=xfs --grow --size=32768
 rootpw --lock --iscrypted $6$0LPXGhsb5MOJ160J$K97FKtUs0SgIXum7OpGk69m.asoBR0Os86DpbUnes5JO27aV5XzfEgtpVb/Ff8RMKl.izzSgbqwK8XPpYRFV20
 user --name=voxel --groups=wheel --password=$6$0LPXGhsb5MOJ160J$K97FKtUs0SgIXum7OpGk69m.asoBR0Os86DpbUnes5JO27aV5XzfEgtpVb/Ff8RMKl.izzSgbqwK8XPpYRFV20 --iscrypted
 
+%post --nochroot --erroronfail
+# Anaconda resolves --device=link only when carrier is already present. Some
+# physical NICs report carrier too late, leaving the generated Ethernet profile
+# with autoconnect=false. Normalize installer-created Ethernet profiles so the
+# installed appliance can obtain DHCP normally on first boot and after reboots.
+network_dir=/mnt/sysroot/etc/NetworkManager/system-connections
+if [ -d "${network_dir}" ]; then
+    for profile in "${network_dir}"/*.nmconnection; do
+        [ -f "${profile}" ] || continue
+        if awk '
+            /^\[connection\][[:space:]]*$/ { in_connection=1; next }
+            /^\[/ { in_connection=0 }
+            in_connection && /^[[:space:]]*type[[:space:]]*=[[:space:]]*(ethernet|802-3-ethernet)[[:space:]]*$/ { found=1 }
+            END { exit(found ? 0 : 1) }
+        ' "${profile}"; then
+            tmp="$(mktemp)"
+            if nmcli --offline connection modify connection.autoconnect yes < "${profile}" > "${tmp}"; then
+                cat "${tmp}" > "${profile}"
+                rm -f "${tmp}"
+            else
+                rm -f "${tmp}"
+                echo "ERROR: failed to enable Ethernet autoconnect for ${profile}" >&2
+                exit 1
+            fi
+        fi
+    done
+fi
+%end
+
 %post --erroronfail
 # This installer alone owns the known voxel/voxel bootstrap credential. Expire
 # it so first authentication requires replacing the real Linux password. bootc

@@ -150,6 +150,16 @@ The current GitHub Actions workflow exposes these main choices:
 
 The workflow validates these values before building the ISO.
 
+## Ethernet activation and first-boot DHCP
+
+The unattended Kickstart requests DHCP with `--device=link --activate --onboot=on`. The `link` selector is useful when the installer already sees carrier, but physical NICs do not all report carrier at the same point in the installer boot sequence.
+
+Anaconda can therefore create a valid DHCP Ethernet profile with `autoconnect=false` when no wired interface has carrier at the moment `--device=link` is resolved. That profile works when activated manually, but would remain disconnected after every reboot.
+
+To make the appliance behavior deterministic, the installer runs a `%post --nochroot` normalization pass over Ethernet profiles written into the target system. Each Ethernet keyfile is passed through `nmcli --offline connection modify connection.autoconnect yes`. The original profile file is rewritten in place so its ownership, permissions, and SELinux metadata remain intact. The logic does not hard-code an interface name, MAC address, or NIC driver.
+
+This is an installer responsibility rather than an image-level fallback profile: JustVoxel Base enables NetworkManager, while the installer owns creation of the machine-specific Ethernet connection profile.
+
 ## Destructive installation model
 
 The installer is intentionally simple and destructive to the selected installation disk.
