@@ -315,6 +315,32 @@ jobs:
 
           echo 'Installer runtime configuration prepared successfully.'
 
+      - name: Validate Ethernet autoconnect safeguard
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import tomllib
+          from pathlib import Path
+
+          config = tomllib.loads(Path("installer/runtime-iso.toml").read_text())
+          kickstart = config["customizations"]["installer"]["kickstart"]["contents"]
+
+          required = (
+              "network --bootproto=dhcp --device=link --activate --onboot=on --hostname=justvoxel",
+              "%post --nochroot --erroronfail",
+              "network_dir=/mnt/sysroot/etc/NetworkManager/system-connections",
+              "nmcli --offline connection modify connection.autoconnect yes",
+          )
+          missing = [entry for entry in required if entry not in kickstart]
+          if missing:
+              raise SystemExit(
+                  "ERROR: installer Ethernet autoconnect safeguard is incomplete: "
+                  + ", ".join(missing)
+              )
+          PY
+
       - name: Resolve selected bootc image
         id: source
         shell: bash
@@ -375,6 +401,39 @@ jobs:
             --file installer/Containerfile \
             --tag "${INSTALLER_IMAGE}" \
             .
+
+      - name: Validate NetworkManager offline profile normalization
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat > "${RUNNER_TEMP}/ethernet.nmconnection" <<'EOF'
+          [connection]
+          id=fixture
+          uuid=11111111-2222-3333-4444-555555555555
+          type=ethernet
+          autoconnect=false
+          interface-name=eth0
+
+          [ethernet]
+
+          [ipv4]
+          method=auto
+
+          [ipv6]
+          method=auto
+          EOF
+
+          sudo podman run --rm -i \
+            --entrypoint /bin/bash \
+            "${INSTALLER_IMAGE}" \
+            -c 'nmcli --offline connection modify connection.autoconnect yes' \
+            < "${RUNNER_TEMP}/ethernet.nmconnection" \
+            > "${RUNNER_TEMP}/ethernet-normalized.nmconnection"
+
+          grep -Fqx 'autoconnect=true' "${RUNNER_TEMP}/ethernet-normalized.nmconnection"
+          grep -Fqx 'type=ethernet' "${RUNNER_TEMP}/ethernet-normalized.nmconnection"
+          grep -Fqx 'method=auto' "${RUNNER_TEMP}/ethernet-normalized.nmconnection"
 
       - name: Validate timezone and keyboard against installer environment
         shell: bash
