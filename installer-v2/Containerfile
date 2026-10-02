@@ -7,6 +7,8 @@ RUN dnf install -y \
     anaconda-install-img-deps \
     anaconda-dracut \
     anaconda-webui \
+    firefox \
+    dbus-glib \
     dracut-config-generic \
     dracut-network \
     net-tools \
