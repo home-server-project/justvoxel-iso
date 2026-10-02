@@ -1,7 +1,12 @@
 name: Build JustVoxel installer v2 offline ISO
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - testing-v2
+    paths:
+      - ".github/workflows/build-installer-v2.yml"
+      - "installer-v2/**"
 
 permissions:
   contents: read
