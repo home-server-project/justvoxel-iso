@@ -2,7 +2,7 @@ ARG INSTALLER_BASE_IMAGE=quay.io/fedora/fedora-bootc:44
 FROM registry.fedoraproject.org/fedora:44 AS webui-builder
 
 # Build tools and fetched sources exist only in this stage.
-RUN dnf install -y git nodejs npm tar \
+RUN dnf install -y git nodejs npm tar diffutils \
     && dnf clean all
 WORKDIR /work/anaconda-webui
 RUN git init . \
