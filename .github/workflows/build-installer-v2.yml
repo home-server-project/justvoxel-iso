@@ -35,17 +35,6 @@ jobs:
         with:
           remove-codeql: true
 
-      - name: Prepare rootful Podman storage
-        run: |
-          set -euo pipefail
-          sudo mkdir -p /etc/containers
-          sudo tee /etc/containers/storage.conf >/dev/null <<'EOF'
-          [storage]
-          driver = "overlay"
-          runroot = "/run/containers/storage"
-          graphroot = "/var/lib/containers/storage"
-          EOF
-
       - name: Authenticate rootful Podman to GHCR
         env:
           GHCR_ACTOR: ${{ github.actor }}
