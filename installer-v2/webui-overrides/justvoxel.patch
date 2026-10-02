@@ -1,0 +1,272 @@
+--- a/src/components/steps.js
++++ b/src/components/steps.js
+@@ -10,11 +10,10 @@
+ import { Page as PageProgress } from "./installation/index.js";
+ import { Page as PageInstallationLanguage } from "./localization/index.js";
+ import { Page as PageReviewConfiguration } from "./review/index.js";
+-import { Page as PageSoftwareSelection } from "./software/index.js";
++import { EditionPage, LoginInformationPage } from "./justvoxel/JustVoxelPages.jsx";
+ import { Page as PageInstallationMethod } from "./storage/installation-method/index.js";
+ import { Page as PageMountPointMapping } from "./storage/mount-point-mapping/index.js";
+ import { Page as PageStorageConfiguration } from "./storage/storage-configuration/index.js";
+-import { Page as PageAccounts } from "./users/index.js";
+ 
+ const _ = cockpit.gettext;
+ 
+@@ -24,7 +23,7 @@
+     const stepsOrder = [
+         new PageInstallationLanguage(args),
+         new PageDateAndTime(args),
+-        new PageSoftwareSelection(args),
++        new EditionPage(args),
+         new PageInstallationMethod(args),
+         new PageStorageConfiguration(args),
+         {
+@@ -33,7 +32,7 @@
+             label: _("Storage configuration"),
+             steps: [mountPointMappingStep],
+         },
+-        new PageAccounts(args),
++        new LoginInformationPage(args),
+         new PageReviewConfiguration(args),
+         new PageProgress(args),
+     ];
+--- a/src/components/app.jsx
++++ b/src/components/app.jsx
+@@ -103,6 +103,7 @@
+               dispatch={dispatch}
+               conf={conf}
+               setCurrentStepId={setCurrentStepId}
++              setShowStorage={setShowStorage}
+               showStorage={showStorage}
+             />
+         </>
+--- a/src/components/AnacondaWizard.jsx
++++ b/src/components/AnacondaWizard.jsx
+@@ -16,7 +16,7 @@
+ import { AnacondaWizardFooter } from "./AnacondaWizardFooter.jsx";
+ import { getSteps } from "./steps.js";
+ 
+-export const AnacondaWizard = ({ currentStepId, dispatch, isFetching, onCritFail, setCurrentStepId, showStorage }) => {
++export const AnacondaWizard = ({ currentStepId, dispatch, isFetching, onCritFail, setCurrentStepId, setShowStorage, showStorage }) => {
+     // The Form should be disabled while backend checks are in progress
+     // or the page initialization is in progress
+     const [isFormDisabled, setIsFormDisabled] = useState(false);
+@@ -35,6 +35,7 @@
+         onCritFail,
+         setIsFormDisabled,
+         setIsFormValid,
++        setShowStorage,
+     };
+ 
+     const stepsOrder = getSteps(userInterfaceConfig, { isBootIso, payloadType, storageScenarioId });
+--- a/src/components/storage/installation-method/InstallationMethod.jsx
++++ b/src/components/storage/installation-method/InstallationMethod.jsx
+@@ -43,6 +43,7 @@
+     onCritFail,
+     setIsFormDisabled,
+     setIsFormValid,
++    setShowStorage,
+     setStepNotification,
+ }) => {
+     const [isReclaimSpaceCheckboxChecked, setIsReclaimSpaceCheckboxChecked] = useState();
+@@ -88,6 +89,7 @@
+                   isFormDisabled={isFormDisabled}
+                   onCritFail={onCritFail}
+                   setIsScenarioValid={setIsScenarioValid}
++                  setShowStorage={setShowStorage}
+                 />
+             </DialogsContext.Provider>
+         </Form>
+--- a/src/components/storage/cockpit-storage-integration/CockpitStorageIntegration.jsx
++++ b/src/components/storage/cockpit-storage-integration/CockpitStorageIntegration.jsx
+@@ -170,7 +170,8 @@
+     );
+ };
+ 
+-export const ModifyStorage = ({ currentStepId, setShowStorage }) => {
++// Share the upstream editor launch context with the installation-method choice.
++export const useStorageEditorLauncher = (setShowStorage) => {
+     const targetSystemRoot = useContext(TargetSystemRootContext);
+     const { diskSelection } = useContext(StorageContext);
+     const devices = useOriginalDevices();
+@@ -185,16 +186,21 @@
+         efi: isEfi,
+         mount_point_prefix: targetSystemRoot,
+     });
++    return () => {
++        window.sessionStorage.setItem("cockpit_anaconda", cockpitAnaconda);
++        setShowStorage(true);
++    };
++};
++
++export const ModifyStorage = ({ currentStepId, setShowStorage }) => {
++    const launchStorageEditor = useStorageEditorLauncher(setShowStorage);
+     // Allow to modify storage only when we are in the scenario selection page
+     const isAriaDisabled = currentStepId !== "anaconda-screen-method";
+     const item = (
+         <DropdownItem
+           id="modify-storage"
+           isAriaDisabled={isAriaDisabled}
+-          onClick={() => {
+-              window.sessionStorage.setItem("cockpit_anaconda", cockpitAnaconda);
+-              setShowStorage(true);
+-          }}
++          onClick={launchStorageEditor}
+         >
+             {_("Launch storage editor")}
+         </DropdownItem>
+--- a/src/components/storage/installation-method/InstallationScenario.jsx
++++ b/src/components/storage/installation-method/InstallationScenario.jsx
+@@ -25,12 +25,15 @@
+ } from "../../../hooks/Storage.jsx";
+ 
+ import { StorageReview } from "../../review/StorageReview.jsx";
++import { useStorageEditorLauncher } from "../cockpit-storage-integration/CockpitStorageIntegration.jsx";
+ import { scenarios, useScenariosAvailability } from "../scenarios/index.js";
+ import { EncryptedDevices } from "./EncryptedDevices.jsx";
+ 
+ import "./InstallationScenario.scss";
+ 
+ const _ = cockpit.gettext;
++const manualScenarios = ["use-configured-storage", "mount-point-mapping"];
++const getAutomaticScenarios = () => scenarios.filter(scenario => !manualScenarios.includes(scenario.id));
+ 
+ export const useScenario = () => {
+     const { storageScenarioId } = useContext(StorageContext);
+@@ -47,8 +50,10 @@
+     dispatch,
+     idPrefix,
+     isFormDisabled,
++    setShowStorage,
+ }) => {
+-    const { appliedPartitioning, storageScenarioId } = useContext(StorageContext);
++    const launchStorageEditor = useStorageEditorLauncher(setShowStorage);
++    const { appliedPartitioning, diskSelection, storageScenarioId } = useContext(StorageContext);
+     const scenarioAvailability = useScenariosAvailability();
+     const scenarioAvailabilityLoading = scenarioAvailability === undefined;
+ 
+@@ -68,7 +73,7 @@
+         if (storageScenarioId && !scenarioAvailability[storageScenarioId].hidden && scenarioAvailability[storageScenarioId].available) {
+             selectedScenarioId = storageScenarioId;
+         } else {
+-            selectedScenarioId = scenarios.find(scenario => (
++            selectedScenarioId = getAutomaticScenarios().find(scenario => (
+                 scenarioAvailability[scenario.id].available &&
+                 !scenarioAvailability[scenario.id].hidden
+             ))?.id;
+@@ -87,7 +92,7 @@
+         return null;
+     }
+ 
+-    const scenarioItems = scenarios.filter(scenario => !scenarioAvailability[scenario.id].hidden).map(scenario => (
++    const scenarioItems = getAutomaticScenarios().filter(scenario => !scenarioAvailability[scenario.id].hidden).map(scenario => (
+         <Radio
+           className={idPrefix + "-scenario"}
+           key={scenario.id}
+@@ -112,7 +117,23 @@
+           } />
+     ));
+ 
+-    return scenarioItems;
++    return (
++        <>
++            {scenarioItems}
++            <Radio
++              className={idPrefix + "-scenario"}
++              id={idPrefix + "-scenario-manual"}
++              value="manual"
++              name={idPrefix + "-scenario"}
++              label={_("Manual partitioning")}
++              description={_("Create or modify partitions using the storage editor.")}
++              isDisabled={isFormDisabled || diskSelection.selectedDisks.length === 0}
++              isChecked={manualScenarios.includes(storageScenarioId)}
++              onChange={launchStorageEditor}
++              body={storageScenarioId === "use-configured-storage" && <StorageReview />}
++            />
++        </>
++    );
+ };
+ 
+ export const InstallationScenario = ({
+@@ -121,6 +142,7 @@
+     isFirstScreen,
+     isFormDisabled,
+     setIsScenarioValid,
++    setShowStorage,
+ }) => {
+     const headingLevel = isFirstScreen ? "h3" : "h2";
+     const { diskSelection, storageScenarioId } = useContext(StorageContext);
+@@ -141,7 +163,7 @@
+         setIsScenarioValid(!!storageScenarioId);
+     }, [storageScenarioId, setIsScenarioValid]);
+ 
+-    if (noScenariosAvailable && !showLuksUnlock) {
++    if (noScenariosAvailable && !showLuksUnlock && diskSelection.selectedDisks.length === 0) {
+         return null;
+     }
+ 
+@@ -162,6 +184,7 @@
+                   dispatch={dispatch}
+                   idPrefix={idPrefix}
+                   isFormDisabled={isFormDisabled}
++                  setShowStorage={setShowStorage}
+                 />
+             </FormGroup>
+         </FormSection>
+--- a/src/components/review/ReviewConfiguration.jsx
++++ b/src/components/review/ReviewConfiguration.jsx
+@@ -22,7 +22,6 @@
+     SystemTypeContext,
+     TimezoneContext,
+     UserInterfaceContext,
+-    UsersContext,
+ } from "../../contexts/Common.jsx";
+ 
+ import {
+@@ -61,22 +60,7 @@
+     );
+ };
+ 
+-const AccountsDescription = () => {
+-    const accounts = useContext(UsersContext);
+-
+-    if (accounts.skipAccountCreation && accounts.isRootEnabled) {
+-        return _("Root account is enabled, but no user account has been configured");
+-    } else if (!accounts.skipAccountCreation && !accounts.isRootEnabled) {
+-        return accounts.fullName ? `${accounts.fullName} (${accounts.userName})` : accounts.userName;
+-    } else {
+-        return (
+-            <Flex direction={{ default: "column" }} spaceItems={{ default: "spaceItemsXs" }}>
+-                <div>{_("Root account is enabled")}</div>
+-                <div>{cockpit.format("User account: $0", accounts.fullName ? `${accounts.fullName} (${accounts.userName})` : accounts.userName)}</div>
+-            </Flex>
+-        );
+-    }
+-};
++const AccountsDescription = () => _("voxel (password change required)");
+ 
+ export const ReviewConfiguration = ({ setIsFormValid, setStepNotification }) => {
+     const osRelease = useContext(OsReleaseContext);
+@@ -187,14 +171,13 @@
+                       term={_("Timezone")}
+                       description={timezone}
+                     />}
+-                    {!hiddenScreens.includes("anaconda-screen-accounts") &&
+-                        <ReviewDescriptionList>
+-                            <ReviewDescriptionListItem
+-                              id={`${SCREEN_ID}-target-system-account`}
+-                              term={_("Account")}
+-                              description={<AccountsDescription />}
+-                            />
+-                        </ReviewDescriptionList>}
++                    <ReviewDescriptionList>
++                        <ReviewDescriptionListItem
++                          id={`${SCREEN_ID}-target-system-account`}
++                          term={_("Account")}
++                          description={<AccountsDescription />}
++                        />
++                    </ReviewDescriptionList>
+                     {isBootIso &&
+                         <ReviewDescriptionList>
+                             <HostnameRow />
