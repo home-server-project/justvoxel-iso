@@ -80,6 +80,7 @@ jobs:
             --volume "${GITHUB_WORKSPACE}/output:/output" \
             "${IMAGE_BUILDER_IMAGE}" build \
             --bootc-ref "${INSTALLER_IMAGE}" \
+            --bootc-default-fs ext4 \
             --bootc-installer-payload-ref "${PAYLOAD_IMAGE}" \
             --output-dir /output \
             --output-name "${ISO_BASENAME}" \
