@@ -31,6 +31,13 @@ RUN mkdir -p /boot/efi \
     && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
 # COPY paths use the repository root as the build context.
+RUN mkdir -p /etc/anaconda/conf.d
+COPY installer-v2/90-justvoxel.conf /etc/anaconda/conf.d/90-justvoxel.conf
+COPY installer-v2/firefox-userChrome.css /usr/share/anaconda/firefox-theme/default/chrome/userChrome.css
+RUN mkdir -p /usr/share/cockpit/branding/fedora
+COPY installer-v2/branding.css /usr/share/cockpit/branding/fedora/branding.css
+COPY installer-v2/jv-inst-logo.png /usr/share/cockpit/branding/fedora/logo.png
+COPY installer-v2/.buildstamp /.buildstamp
 COPY installer-v2/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY installer-v2/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
 

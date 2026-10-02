@@ -1,0 +1,36 @@
+/* Installer-only Cockpit branding, scoped to Anaconda. */
+.anaconda {
+    --brand-default-light: #68bd8e;
+    --brand-default: #2f6c4a;
+    --brand-default-dark: #184c31;
+}
+
+:not(.pf-v6-theme-dark) .anaconda {
+    --pf-t--global--color--brand--default: var(--brand-default);
+    --pf-t--global--color--brand--hover: var(--brand-default-dark);
+}
+
+.pf-v6-theme-dark .anaconda {
+    --pf-t--global--color--brand--default: var(--brand-default-light);
+    --pf-t--global--color--brand--hover: var(--brand-default);
+}
+
+.anaconda .logo {
+    background-image: url("logo.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: left center;
+    inline-size: 162px;
+    block-size: 60px;
+    filter: none !important;
+}
+
+#badge {
+    background-image: url("logo.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: left center;
+    inline-size: 162px;
+    block-size: 60px;
+    filter: none;
+}
