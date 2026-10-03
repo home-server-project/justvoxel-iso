@@ -44,6 +44,7 @@ RUN dnf install -y \
     grub2-efi-x64-cdboot \
     shim-x64 \
     plymouth \
+    plymouth-plugin-script \
     default-fonts-core-sans \
     default-fonts-other-sans \
     google-noto-sans-cjk-fonts \
@@ -70,6 +71,9 @@ RUN mkdir -p /boot/efi \
 # COPY paths use the repository root as the build context.
 RUN mkdir -p /etc/anaconda/conf.d
 COPY installer-v2/90-justvoxel.conf /etc/anaconda/conf.d/90-justvoxel.conf
+# Replace platform defaults only in this disposable installer environment.
+COPY installer-v2/anaconda-overrides/set-platform-defaults.py /tmp/set-platform-defaults.py
+RUN python3 /tmp/set-platform-defaults.py && rm /tmp/set-platform-defaults.py
 COPY installer-v2/firefox-userChrome.css /usr/share/anaconda/firefox-theme/default/chrome/userChrome.css
 RUN mkdir -p /usr/share/cockpit/branding/fedora
 COPY installer-v2/branding.css /usr/share/cockpit/branding/fedora/branding.css
@@ -77,6 +81,8 @@ COPY installer-v2/jv-inst-logo.png /usr/share/cockpit/branding/fedora/logo.png
 COPY installer-v2/.buildstamp /.buildstamp
 COPY installer-v2/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY installer-v2/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
+COPY installer-v2/plymouth/ /usr/share/plymouth/themes/justvoxel/
+RUN plymouth-set-default-theme justvoxel
 
 # Reproduce Lorax's temporary boot.iso environment, never target OS accounts.
 # Reference: https://osbuild.org/docs/developer-guide/projects/image-builder/advanced/bootc/isos/
@@ -97,7 +103,8 @@ RUN ln -sfn /usr/lib/systemd/system/anaconda-shell@.service /usr/lib/systemd/sys
 RUN mkdir -p "$(realpath /root)" \
     && kernel=$(kernel-install list --json pretty | jq -er '.[] | select(.has_kernel == true) | .version') \
     && DRACUT_NO_XATTR=1 dracut --force --zstd --reproducible --no-hostonly \
-        --add anaconda "/usr/lib/modules/${kernel}/initramfs.img" "${kernel}"
+        --add "anaconda plymouth" --include /.buildstamp /.buildstamp \
+        "/usr/lib/modules/${kernel}/initramfs.img" "${kernel}"
 
 # The temporary graphical installer runs as root and needs PipeWire available.
 RUN mkdir -p /etc/systemd/user/pipewire.service.d /etc/systemd/user/pipewire.socket.d \

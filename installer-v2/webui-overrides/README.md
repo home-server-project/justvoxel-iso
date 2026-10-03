@@ -14,7 +14,8 @@ the distro RPM continues to provide Firefox and Anaconda/Cockpit integration.
 
 `justvoxel.patch` modifies only wizard composition, the storage-editor launcher
 and its prop plumbing, Installation method choices and automatic storage
-application, the storage sidebar product sentence, and the review Account row.
+application and scenario availability evaluation, the storage sidebar product
+sentence, and the review Account row.
 `src/components/justvoxel/JustVoxelPages.jsx` supplies the edition and login
 information pages. Upstream source headers remain intact when the patch applies.
 No upstream repository, dependencies, or compiled assets are vendored here.
@@ -36,19 +37,37 @@ It preserves the upstream confirmation warning, Cockpit editor, and
 `use-configured-storage` manual scenario. Technical manual scenarios are not
 duplicated as radio choices. The only automatic choice is Use entire disk, using
 upstream `erase-all` and its availability rules; dual-boot, reclaim, and reinstall
-choices are not exposed. It is selected by default unless a valid manual layout
-is active. Selecting Manual partitioning again reopens the editor. Automatic
+choices are not exposed. The availability hook evaluates only `erase-all`,
+`mount-point-mapping`, and `use-configured-storage`; Fedora home-reuse/reinstall
+and free-space availability hooks never execute. Their scenario metadata stays
+available to upstream helpers. Use entire disk is selected by default unless a
+valid manual layout is active. Selecting Manual partitioning again reopens the editor. Automatic
 storage is applied and validated on Installation method before advancing, with
 upstream errors and warning confirmation preserved because Storage configuration
 is hidden.
 
 Automatic partitioning uses GPT and plain ext4 root, growing from 8 GiB without
 a maximum, with no separate home or disk swap. Anaconda/Blivet supplies the
-platform boot partitions and their sizes. Encryption is not enabled by default.
+platform boot partitions. The installer-only build helper in
+`../anaconda-overrides/set-platform-defaults.py` replaces Anaconda's platform
+specifications with a fixed 512 MiB EFI system partition and a fixed 1 GiB ext4
+`/boot`. It fails the build if the expected upstream specifications change.
+`default_partitioning` remains root-only, avoiding duplicate boot partitions.
+Encryption is not enabled by default.
 The installer environment's NAME/PRETTY_NAME presentation fields supply product
 text while Fedora platform identity and the installed payload remain unchanged.
 
+`../branding.css` darkens only the header gradient behind the logo. The
+installer-only Plymouth script theme in `../plymouth/` presents a light JustVoxel
+wordmark on dark green, without new raster artwork or loading dots. The
+Containerfile installs the script plugin and selects the theme before dracut;
+the Plymouth module includes the theme and its fonts in the initramfs.
+Dracut explicitly includes `/.buildstamp` using `--include`. The upstream EDD
+probe and its harmless warning remain unchanged.
+
 This edit-only change has not been built, tested, or booted. Review and manual
 Mode B validation must cover the wizard order, product text, Firefox chrome,
-backgrounds, bootstrap account, blank-disk automatic layout, and the storage
-editor warning/validation/return behavior before accepting the next ISO.
+header/logo contrast, Plymouth text and boot warnings, bootstrap account,
+automatic layout on blank disks and disks with an existing OS (including exact
+EFI and `/boot` sizes), and the storage editor warning/validation/return behavior
+before accepting the next ISO.

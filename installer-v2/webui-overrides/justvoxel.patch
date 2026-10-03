@@ -10,9 +10,9 @@
  import { Page as PageMountPointMapping } from "./storage/mount-point-mapping/index.js";
  import { Page as PageStorageConfiguration } from "./storage/storage-configuration/index.js";
 -import { Page as PageAccounts } from "./users/index.js";
- 
+
  const _ = cockpit.gettext;
- 
+
 @@ -24,7 +23,7 @@
      const stepsOrder = [
          new PageInstallationLanguage(args),
@@ -46,7 +46,7 @@
 @@ -16,7 +16,7 @@
  import { AnacondaWizardFooter } from "./AnacondaWizardFooter.jsx";
  import { getSteps } from "./steps.js";
- 
+
 -export const AnacondaWizard = ({ currentStepId, dispatch, isFetching, onCritFail, setCurrentStepId, showStorage }) => {
 +export const AnacondaWizard = ({ currentStepId, dispatch, isFetching, onCritFail, setCurrentStepId, setShowStorage, showStorage }) => {
      // The Form should be disabled while backend checks are in progress
@@ -58,12 +58,12 @@
          setIsFormValid,
 +        setShowStorage,
      };
- 
+
      const stepsOrder = getSteps(userInterfaceConfig, { isBootIso, payloadType, storageScenarioId });
 --- a/src/components/storage/installation-method/InstallationMethod.jsx
 +++ b/src/components/storage/installation-method/InstallationMethod.jsx
 @@ -26,7 +26,6 @@
- 
+
  import { AnacondaWizardFooter } from "../../AnacondaWizardFooter.jsx";
  import { createWarningNotification } from "../Common.jsx";
 -import { scenarios } from "../scenarios/index.js";
@@ -88,7 +88,7 @@
          </Form>
      );
  };
- 
+
 -const CustomFooter = ({ isFormDisabled, isReclaimSpaceCheckboxChecked, setStepNotification }) => {
 +const CustomFooter = ({ isFormDisabled, setStepNotification }) => {
      const [isReclaimSpaceModalOpen, setIsReclaimSpaceModalOpen] = useState(false);
@@ -160,7 +160,7 @@
 +                    onFail,
                      onSuccess: (validationReport) => {
                          const warningNotification = createWarningNotification(validationReport, step);
- 
+
 @@ -163,6 +159,8 @@
                      },
                      partitioning: part,
@@ -175,7 +175,7 @@
 @@ -170,7 +170,8 @@
      );
  };
- 
+
 -export const ModifyStorage = ({ currentStepId, setShowStorage }) => {
 +// Share the upstream editor launch context with the installation-method choice.
 +export const useStorageEditorLauncher = (setShowStorage) => {
@@ -212,18 +212,18 @@
 +++ b/src/components/storage/installation-method/InstallationScenario.jsx
 @@ -25,12 +25,15 @@
  } from "../../../hooks/Storage.jsx";
- 
+
  import { StorageReview } from "../../review/StorageReview.jsx";
 +import { useStorageEditorLauncher } from "../cockpit-storage-integration/CockpitStorageIntegration.jsx";
  import { scenarios, useScenariosAvailability } from "../scenarios/index.js";
  import { EncryptedDevices } from "./EncryptedDevices.jsx";
- 
+
  import "./InstallationScenario.scss";
- 
+
  const _ = cockpit.gettext;
 +const manualScenarios = ["use-configured-storage", "mount-point-mapping"];
 +const getAutomaticScenarios = () => scenarios.filter(scenario => scenario.id === "erase-all");
- 
+
  export const useScenario = () => {
      const { storageScenarioId } = useContext(StorageContext);
 @@ -47,8 +50,10 @@
@@ -237,7 +237,7 @@
 +    const { appliedPartitioning, diskSelection, storageScenarioId } = useContext(StorageContext);
      const scenarioAvailability = useScenariosAvailability();
      const scenarioAvailabilityLoading = scenarioAvailability === undefined;
- 
+
 @@ -68,7 +73,8 @@
 -        if (storageScenarioId && !scenarioAvailability[storageScenarioId].hidden && scenarioAvailability[storageScenarioId].available) {
 +        if ((storageScenarioId === "erase-all" || manualScenarios.includes(storageScenarioId)) &&
@@ -255,11 +255,11 @@
 -        }
 +        dispatch(setStorageScenarioAction(selectedScenarioId || ""));
      }, [appliedPartitioning, dispatch, scenarioAvailability, scenarioAvailabilityLoading, storageScenarioId]);
- 
+
 @@ -87,7 +91,7 @@
          return null;
      }
- 
+
 -    const scenarioItems = scenarios.filter(scenario => !scenarioAvailability[scenario.id].hidden).map(scenario => (
 +    const scenarioItems = getAutomaticScenarios().filter(scenario => !scenarioAvailability[scenario.id].hidden).map(scenario => (
          <Radio
@@ -268,7 +268,7 @@
 @@ -112,7 +116,23 @@
            } />
      ));
- 
+
 -    return scenarioItems;
 +    return (
 +        <>
@@ -288,7 +288,7 @@
 +        </>
 +    );
  };
- 
+
  export const InstallationScenario = ({
 @@ -121,6 +141,7 @@
      isFirstScreen,
@@ -301,12 +301,12 @@
 @@ -141,7 +162,7 @@
          setIsScenarioValid(!!storageScenarioId);
      }, [storageScenarioId, setIsScenarioValid]);
- 
+
 -    if (noScenariosAvailable && !showLuksUnlock) {
 +    if (noScenariosAvailable && !showLuksUnlock && diskSelection.selectedDisks.length === 0) {
          return null;
      }
- 
+
 @@ -162,6 +183,7 @@
                    dispatch={dispatch}
                    idPrefix={idPrefix}
@@ -334,12 +334,12 @@
      UserInterfaceContext,
 -    UsersContext,
  } from "../../contexts/Common.jsx";
- 
+
  import {
 @@ -61,22 +60,7 @@
      );
  };
- 
+
 -const AccountsDescription = () => {
 -    const accounts = useContext(UsersContext);
 -
@@ -357,7 +357,7 @@
 -    }
 -};
 +const AccountsDescription = () => _("voxel (password change required)");
- 
+
  export const ReviewConfiguration = ({ setIsFormValid, setStepNotification }) => {
      const osRelease = useContext(OsReleaseContext);
 @@ -187,14 +171,13 @@
@@ -382,3 +382,31 @@
                      {isBootIso &&
                          <ReviewDescriptionList>
                              <HostnameRow />
+--- a/src/components/storage/scenarios/index.js
++++ b/src/components/storage/scenarios/index.js
+@@ -11,8 +11,7 @@
+ import { scenario as scenarioUseFreeSpace } from "./use-free-space/index.js";
+
+ export const useScenariosAvailability = () => {
+-    const scenarioReinstallFedoraAvailability = scenarioReinstallFedora.getAvailability();
+-    const scenarioUseFreeSpaceAvailability = scenarioUseFreeSpace.getAvailability();
++    // JustVoxel never evaluates Fedora reinstall/home-reuse or free-space hooks.
+     const scenarioEraseAllAvailability = scenarioEraseAll.getAvailability();
+     const scenarioMountPointMappingAvailability = scenarioMountPointMapping.getAvailability();
+     const scenarioConfiguredStorageAvailability = scenarioConfiguredStorage.getAvailability();
+@@ -23,15 +22,11 @@
+             [scenarioConfiguredStorage.id]: scenarioConfiguredStorageAvailability,
+             [scenarioEraseAll.id]: scenarioEraseAllAvailability,
+             [scenarioMountPointMapping.id]: scenarioMountPointMappingAvailability,
+-            [scenarioReinstallFedora.id]: scenarioReinstallFedoraAvailability,
+-            [scenarioUseFreeSpace.id]: scenarioUseFreeSpaceAvailability,
+         });
+     }, [
+         scenarioConfiguredStorageAvailability,
+         scenarioEraseAllAvailability,
+         scenarioMountPointMappingAvailability,
+-        scenarioReinstallFedoraAvailability,
+-        scenarioUseFreeSpaceAvailability,
+     ]);
+
+     if (Object.values(scenarioAvailability || {}).some(value => value === undefined)) {
