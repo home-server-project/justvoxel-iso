@@ -19,8 +19,8 @@ replacements = (
         '            size=Size("2GiB")\n',
         '            mountpoint="/boot",\n'
         '            fstype="ext4",\n'
-        '            size=Size("1GiB"),\n'
-        '            max_size=Size("1GiB"),\n'
+        '            size=Size("896MiB"),\n'
+        '            max_size=Size("896MiB"),\n'
         '            grow=False\n',
     ),
     (
@@ -31,8 +31,8 @@ replacements = (
         '            grow=True\n',
         '            mountpoint="/boot/efi",\n'
         '            fstype="efi",\n'
-        '            size=Size("512MiB"),\n'
-        '            max_size=Size("512MiB"),\n'
+        '            size=Size("128MiB"),\n'
+        '            max_size=Size("128MiB"),\n'
         '            grow=False\n',
     ),
 )
