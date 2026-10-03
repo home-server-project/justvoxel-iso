@@ -13,7 +13,8 @@ Only `dist/` replaces `/usr/share/cockpit/anaconda-webui/` in the final stage;
 the distro RPM continues to provide Firefox and Anaconda/Cockpit integration.
 
 `justvoxel.patch` modifies only wizard composition, the storage-editor launcher
-and its prop plumbing, Installation method choices, and the review Account row.
+and its prop plumbing, Installation method choices and automatic storage
+application, the storage sidebar product sentence, and the review Account row.
 `src/components/justvoxel/JustVoxelPages.jsx` supplies the edition and login
 information pages. Upstream source headers remain intact when the patch applies.
 No upstream repository, dependencies, or compiled assets are vendored here.
@@ -33,8 +34,13 @@ Manual partitioning uses the same launch hook as the existing kebab-menu entry.
 It preserves the upstream confirmation warning, Cockpit editor, and
 `CheckStorageDialog` return path. A valid configured layout remains the upstream
 `use-configured-storage` manual scenario. Technical manual scenarios are not
-duplicated as radio choices; other automatic scenarios retain their upstream
-availability rules. Selecting Manual partitioning again reopens the editor.
+duplicated as radio choices. The only automatic choice is Use entire disk, using
+upstream `erase-all` and its availability rules; dual-boot, reclaim, and reinstall
+choices are not exposed. It is selected by default unless a valid manual layout
+is active. Selecting Manual partitioning again reopens the editor. Automatic
+storage is applied and validated on Installation method before advancing, with
+upstream errors and warning confirmation preserved because Storage configuration
+is hidden.
 
 Automatic partitioning uses GPT and plain ext4 root, growing from 8 GiB without
 a maximum, with no separate home or disk swap. Anaconda/Blivet supplies the
