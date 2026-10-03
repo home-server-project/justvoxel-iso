@@ -33,6 +33,15 @@
      ];
 --- a/src/components/app.jsx
 +++ b/src/components/app.jsx
+@@ -88,7 +88,7 @@
+                 <AnacondaHeader
+                   currentStepId={currentStepId}
+                   dispatch={dispatch}
+-                  title={title}
++                  title={cockpit.format(_("$0 installation"), "JustVoxel 10")}
+                   reportLinkURL={reportLinkURL}
+                   onCritFail={onCritFail}
+                   showStorage={showStorage}
 @@ -103,6 +103,7 @@
                dispatch={dispatch}
                conf={conf}

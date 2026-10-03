@@ -12,7 +12,8 @@ and uses `npm ci`. Build tools and sources stay in the Fedora 44 builder stage.
 Only `dist/` replaces `/usr/share/cockpit/anaconda-webui/` in the final stage;
 the distro RPM continues to provide Firefox and Anaconda/Cockpit integration.
 
-`justvoxel.patch` modifies only wizard composition, the storage-editor launcher
+`justvoxel.patch` modifies only wizard composition, the persistent header title,
+the storage-editor launcher
 and its prop plumbing, Installation method choices and automatic storage
 application and scenario availability evaluation, the storage sidebar product
 sentence, and the review Account row.
@@ -56,18 +57,20 @@ specifications with a fixed 512 MiB EFI system partition and a fixed 1 GiB ext4
 Encryption is not enabled by default.
 The installer environment's NAME/PRETTY_NAME presentation fields supply product
 text while Fedora platform identity and the installed payload remain unchanged.
+Only the persistent wizard header overrides that product text with
+`JustVoxel 10 installation`; edition and review product information are unchanged.
 
 `../branding.css` darkens only the header gradient behind the logo. The
-installer-only Plymouth script theme in `../plymouth/` presents a light JustVoxel
-wordmark on dark green, without new raster artwork or loading dots. The
+installer-only Plymouth script theme in `../plymouth/` centers the provided
+`logo.png` scaled to 720x240 on dark green, without loading dots or a spinner. The
 Containerfile installs the script plugin and selects the theme before dracut;
-the Plymouth module includes the theme and its fonts in the initramfs.
+the Plymouth module includes the theme in the initramfs.
 Dracut explicitly includes `/.buildstamp` using `--include`. The upstream EDD
 probe and its harmless warning remain unchanged.
 
 This edit-only change has not been built, tested, or booted. Review and manual
 Mode B validation must cover the wizard order, product text, Firefox chrome,
-header/logo contrast, Plymouth text and boot warnings, bootstrap account,
+header/logo contrast, Plymouth logo and boot warnings, bootstrap account,
 automatic layout on blank disks and disks with an existing OS (including exact
 EFI and `/boot` sizes), and the storage editor warning/validation/return behavior
 before accepting the next ISO.

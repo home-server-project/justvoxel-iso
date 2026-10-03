@@ -1,23 +1,19 @@
-# Installer-only text branding; no raster artwork or loading dots.
+# Installer-only logo on the dark-green background.
 Window.SetBackgroundTopColor(0.063, 0.208, 0.133);
 Window.SetBackgroundBottomColor(0.031, 0.102, 0.067);
 
-wordmark.image = Image.Text("JustVoxel", 0.91, 0.98, 0.94, 1, "Sans Bold 36");
-wordmark.sprite = Sprite(wordmark.image);
-subtitle.image = Image.Text("Starting installer", 0.75, 0.90, 0.81, 1, "Sans 16");
-subtitle.sprite = Sprite(subtitle.image);
+logo.image = Image("logo.png");
+logo.image = logo.image.Scale(720, 240);
+logo.sprite = Sprite(logo.image);
 
 # Recenter when the display becomes available or its dimensions change.
 fun refresh_callback ()
 {
-    wordmark.sprite.SetPosition(
-        Window.GetX() + (Window.GetWidth() - wordmark.image.GetWidth()) / 2,
-        Window.GetY() + (Window.GetHeight() - wordmark.image.GetHeight()) / 2,
-        0);
-    subtitle.sprite.SetPosition(
-        Window.GetX() + (Window.GetWidth() - subtitle.image.GetWidth()) / 2,
-        Window.GetY() + (Window.GetHeight() + wordmark.image.GetHeight()) / 2 + 16,
+    logo.sprite.SetPosition(
+        Window.GetX() + (Window.GetWidth() - logo.image.GetWidth()) / 2,
+        Window.GetY() + (Window.GetHeight() - logo.image.GetHeight()) / 2,
         0);
 }
 
+refresh_callback();
 Plymouth.SetRefreshFunction(refresh_callback);
