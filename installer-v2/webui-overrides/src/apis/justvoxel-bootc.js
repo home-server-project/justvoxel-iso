@@ -66,7 +66,7 @@ export const checkJustVoxelEditionAvailable = async (edition) => {
         throw new Error("Unknown JustVoxel edition");
     }
 
-    const tokenUrl = "https://ghcr.io/token?scope=" +
+    const tokenUrl = "https://ghcr.io/token?service=ghcr.io&scope=" +
         encodeURIComponent("repository:" + repository + ":pull");
 
     let token;
