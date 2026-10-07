@@ -24,8 +24,11 @@ const useAlwaysValid = (setIsFormValid) => {
     }, [setIsFormValid]);
 };
 
+const EDITION_STORAGE_KEY = "justvoxel-edition";
+
 const JustVoxelEdition = ({ idPrefix, setIsFormDisabled, setIsFormValid }) => {
-    const [edition, setEdition] = useState("hws");
+    const savedEdition = window.sessionStorage.getItem(EDITION_STORAGE_KEY);
+    const [edition, setEdition] = useState(savedEdition === "vm" ? "vm" : "hws");
     const [recommendedEdition, setRecommendedEdition] = useState("hws");
     const [detecting, setDetecting] = useState(true);
     const [applying, setApplying] = useState(false);
@@ -45,12 +48,16 @@ const JustVoxelEdition = ({ idPrefix, setIsFormDisabled, setIsFormValid }) => {
                     const detected = output.trim();
                     const recommendation = detected && detected !== "none" ? "vm" : "hws";
                     setRecommendedEdition(recommendation);
-                    setEdition(recommendation);
+                    if (!window.sessionStorage.getItem(EDITION_STORAGE_KEY)) {
+                        setEdition(recommendation);
+                    }
                 })
                 .catch(() => {
                     if (!cancelled) {
                         setRecommendedEdition("hws");
-                        setEdition("hws");
+                        if (!window.sessionStorage.getItem(EDITION_STORAGE_KEY)) {
+                            setEdition("hws");
+                        }
                     }
                 })
                 .finally(() => {
@@ -81,6 +88,7 @@ const JustVoxelEdition = ({ idPrefix, setIsFormDisabled, setIsFormValid }) => {
         setJustVoxelEdition(edition)
                 .then(imageRef => {
                     if (!cancelled) {
+                        window.sessionStorage.setItem(EDITION_STORAGE_KEY, edition);
                         setConfiguredRef(imageRef);
                         setIsFormValid(true);
                     }
