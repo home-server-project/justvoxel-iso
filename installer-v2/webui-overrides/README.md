@@ -39,11 +39,16 @@ network checkpoint completes. HTTP 200 or the registry's expected unauthenticate
 HTTP 401 response counts as reachable. The wizard cannot advance until GHCR is
 reachable; a manual Check again action is available after failures.
 
-HWS is preselected; VM is disabled and never changes the payload. Login
+The edition page detects virtualization with `systemd-detect-virt --vm`. A
+detected VM recommends and preselects JustVoxel VM; physical hardware, no VM
+result, or a detection error falls back to JustVoxel HWS. Both choices remain
+available for manual override, and the user's choice is kept for the installer
+session. The page updates Anaconda's active BOOTC source configuration over its
+existing D-Bus API so both `sourceImgRef` and `targetImgRef` follow the selected
+`:testing` channel: `justvoxel-vm:testing` or `justvoxel-hws:testing`. Login
 information and the review Account value describe the development voxel/voxel
-bootstrap account. Neither page writes user configuration; account creation,
-locked root, and mandatory first-login password change remain in
-`interactive-defaults.ks`.
+bootstrap account. Account creation, locked root, and mandatory first-login
+password change remain in `interactive-defaults.ks`.
 
 Manual partitioning uses the same launch hook as the existing kebab-menu entry.
 It preserves the upstream confirmation warning, Cockpit editor, and
@@ -84,7 +89,9 @@ probe and its harmless warning remain unchanged.
 This edit-only change has not been built, tested, or booted. Review and manual
 Mode B validation must cover the wizard order, Ethernet DHCP, manual network
 configuration, Wi-Fi discovery/connection on supported hardware, GHCR blocking
-and retry behavior, product text, Firefox chrome,
+and retry behavior, VM detection with VM default, physical/unknown detection
+with HWS default, manual edition override, selected BOOTC source/target refs,
+product text, Firefox chrome,
 header/logo contrast, Plymouth logo and boot warnings, bootstrap account,
 automatic layout on blank disks and disks with an existing OS (including exact
 EFI and `/boot` sizes), and the storage editor warning/validation/return behavior
