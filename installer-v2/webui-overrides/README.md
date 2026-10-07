@@ -18,13 +18,26 @@ and its prop plumbing, Installation method choices and automatic storage
 application and scenario availability evaluation, the storage sidebar product
 sentence, and the review Account row.
 `src/components/justvoxel/JustVoxelPages.jsx` supplies the edition and login
-information pages. Upstream source headers remain intact when the patch applies.
-No upstream repository, dependencies, or compiled assets are vendored here.
+information pages. `src/components/network/` backports the dedicated Network
+wizard page introduced by Anaconda WebUI 70 while keeping the Fedora 44 WebUI 68
+backend/frontend baseline. Upstream source headers remain intact when the patch
+applies. No upstream repository, dependencies, or compiled assets are vendored
+here.
 
-Visible navigation is Welcome, Date and time, JustVoxel edition, Installation
-method, Login information, and Review and install. Installation progress keeps
-upstream's final non-navigation behavior. `90-justvoxel.conf` hides both storage
-configuration pages and the stock account/software pages.
+Visible navigation is Welcome, Network, Date and time, JustVoxel edition,
+Installation method, Login information, and Review and install. Installation
+progress keeps upstream's final non-navigation behavior. `90-justvoxel.conf`
+hides both storage configuration pages and the stock account/software pages.
+
+The Network page embeds Cockpit NetworkManager so Ethernet, Wi-Fi, and supported
+manual NetworkManager configuration stay upstream-owned. The installer image
+explicitly includes `cockpit-networkmanager`, `NetworkManager-wifi`, and the same
+Fedora wireless firmware families used by uCore: Atheros, Broadcom brcmfmac,
+Intel legacy/DVM/MVM, MediaTek mt7xxx, NXP wireless, Realtek, and TI WiLink.
+The page checks `https://ghcr.io/v2/` after initial load and after a Cockpit
+network checkpoint completes. HTTP 200 or the registry's expected unauthenticated
+HTTP 401 response counts as reachable. The wizard cannot advance until GHCR is
+reachable; a manual Check again action is available after failures.
 
 HWS is preselected; VM is disabled and never changes the payload. Login
 information and the review Account value describe the development voxel/voxel
@@ -69,7 +82,9 @@ Dracut explicitly includes `/.buildstamp` using `--include`. The upstream EDD
 probe and its harmless warning remain unchanged.
 
 This edit-only change has not been built, tested, or booted. Review and manual
-Mode B validation must cover the wizard order, product text, Firefox chrome,
+Mode B validation must cover the wizard order, Ethernet DHCP, manual network
+configuration, Wi-Fi discovery/connection on supported hardware, GHCR blocking
+and retry behavior, product text, Firefox chrome,
 header/logo contrast, Plymouth logo and boot warnings, bootstrap account,
 automatic layout on blank disks and disks with an existing OS (including exact
 EFI and `/boot` sizes), and the storage editor warning/validation/return behavior
