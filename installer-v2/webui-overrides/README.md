@@ -43,9 +43,12 @@ The edition page detects virtualization with `systemd-detect-virt --vm`. A
 detected VM recommends and preselects JustVoxel VM; physical hardware, no VM
 result, or a detection error falls back to JustVoxel HWS. Both choices remain
 available for manual override, and the user's choice is kept for the installer
-session. The page updates Anaconda's active BOOTC source configuration over its
-existing D-Bus API so both `sourceImgRef` and `targetImgRef` follow the selected
-`:testing` channel: `justvoxel-vm:testing` or `justvoxel-hws:testing`. Login
+session. Before the edition becomes valid, the page requests an anonymous GHCR
+pull token for the selected repository and checks the selected `:testing`
+manifest. A private, missing, or unreachable image blocks the wizard. After that
+check succeeds, the page updates Anaconda's active BOOTC source configuration
+over its existing D-Bus API so both `sourceImgRef` and `targetImgRef` follow the
+selected `:testing` channel: `justvoxel-vm:testing` or `justvoxel-hws:testing`. Login
 information and the review Account value describe the development voxel/voxel
 bootstrap account. Account creation, locked root, and mandatory first-login
 password change remain in `interactive-defaults.ks`.
