@@ -18,19 +18,40 @@ and its prop plumbing, Installation method choices and automatic storage
 application and scenario availability evaluation, the storage sidebar product
 sentence, and the review Account row.
 `src/components/justvoxel/JustVoxelPages.jsx` supplies the edition and login
-information pages. Upstream source headers remain intact when the patch applies.
-No upstream repository, dependencies, or compiled assets are vendored here.
+information pages. `src/components/network/` backports the dedicated Network
+wizard page introduced by Anaconda WebUI 70 while keeping the Fedora 44 WebUI 68
+backend/frontend baseline. Upstream source headers remain intact when the patch
+applies. No upstream repository, dependencies, or compiled assets are vendored
+here.
 
-Visible navigation is Welcome, Date and time, JustVoxel edition, Installation
-method, Login information, and Review and install. Installation progress keeps
-upstream's final non-navigation behavior. `90-justvoxel.conf` hides both storage
-configuration pages and the stock account/software pages.
+Visible navigation is Welcome, Network, Date and time, JustVoxel edition,
+Installation method, Login information, and Review and install. Installation
+progress keeps upstream's final non-navigation behavior. `90-justvoxel.conf`
+hides both storage configuration pages and the stock account/software pages.
 
-HWS is preselected; VM is disabled and never changes the payload. Login
+The Network page embeds Cockpit NetworkManager so Ethernet, Wi-Fi, and supported
+manual NetworkManager configuration stay upstream-owned. The installer image
+explicitly includes `cockpit-networkmanager`, `NetworkManager-wifi`, and the same
+Fedora wireless firmware families used by uCore: Atheros, Broadcom brcmfmac,
+Intel legacy/DVM/MVM, MediaTek mt7xxx, NXP wireless, Realtek, and TI WiLink.
+The page checks `https://ghcr.io/v2/` after initial load and after a Cockpit
+network checkpoint completes. HTTP 200 or the registry's expected unauthenticated
+HTTP 401 response counts as reachable. The wizard cannot advance until GHCR is
+reachable; a manual Check again action is available after failures.
+
+The edition page detects virtualization with `systemd-detect-virt --vm`. A
+detected VM recommends and preselects JustVoxel VM; physical hardware, no VM
+result, or a detection error falls back to JustVoxel HWS. Both choices remain
+available for manual override, and the user's choice is kept for the installer
+session. Before the edition becomes valid, the page requests an anonymous GHCR
+pull token for the selected repository and checks the selected `:testing`
+manifest. A private, missing, or unreachable image blocks the wizard. After that
+check succeeds, the page updates Anaconda's active BOOTC source configuration
+over its existing D-Bus API so both `sourceImgRef` and `targetImgRef` follow the
+selected `:testing` channel: `justvoxel-vm:testing` or `justvoxel-hws:testing`. Login
 information and the review Account value describe the development voxel/voxel
-bootstrap account. Neither page writes user configuration; account creation,
-locked root, and mandatory first-login password change remain in
-`interactive-defaults.ks`.
+bootstrap account. Account creation, locked root, and mandatory first-login
+password change remain in `interactive-defaults.ks`.
 
 Manual partitioning uses the same launch hook as the existing kebab-menu entry.
 It preserves the upstream confirmation warning, Cockpit editor, and
@@ -55,10 +76,10 @@ specifications with a fixed 512 MiB EFI system partition and a fixed 1 GiB ext4
 `/boot`. It fails the build if the expected upstream specifications change.
 `default_partitioning` remains root-only, avoiding duplicate boot partitions.
 Encryption is not enabled by default.
-The installer environment's NAME/PRETTY_NAME presentation fields supply product
-text while Fedora platform identity and the installed payload remain unchanged.
-Only the persistent wizard header overrides that product text with
-`JustVoxel 10 installation`; edition and review product information are unchanged.
+The installer environment uses edition-neutral JustVoxel presentation text while
+Fedora platform identity and the installed payload remain unchanged. The selected
+VM or HWS edition is shown by the edition page rather than hard-coded into the
+installer identity.
 
 `../branding.css` darkens only the header gradient behind the logo. The
 installer-only Plymouth script theme in `../plymouth/` centers the provided
@@ -69,7 +90,11 @@ Dracut explicitly includes `/.buildstamp` using `--include`. The upstream EDD
 probe and its harmless warning remain unchanged.
 
 This edit-only change has not been built, tested, or booted. Review and manual
-Mode B validation must cover the wizard order, product text, Firefox chrome,
+Mode B validation must cover the wizard order, Ethernet DHCP, manual network
+configuration, Wi-Fi discovery/connection on supported hardware, GHCR blocking
+and retry behavior, VM detection with VM default, physical/unknown detection
+with HWS default, manual edition override, selected BOOTC source/target refs,
+product text, Firefox chrome,
 header/logo contrast, Plymouth logo and boot warnings, bootstrap account,
 automatic layout on blank disks and disks with an existing OS (including exact
 EFI and `/boot` sizes), and the storage editor warning/validation/return behavior

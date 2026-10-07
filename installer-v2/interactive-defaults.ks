@@ -1,4 +1,4 @@
-bootc --source-imgref containers-storage:ghcr.io/home-server-project/justvoxel-hws:testing --target-imgref ghcr.io/home-server-project/justvoxel-hws:testing
+bootc --source-imgref registry:ghcr.io/home-server-project/justvoxel-hws:testing --target-imgref registry:ghcr.io/home-server-project/justvoxel-hws:testing
 
 # The known voxel/voxel credential is installer bootstrap only and must be
 # changed on first authentication.
