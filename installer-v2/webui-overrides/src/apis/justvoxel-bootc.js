@@ -16,6 +16,18 @@ export const JUSTVOXEL_IMAGE_REFS = {
     vm: "registry:ghcr.io/home-server-project/justvoxel-vm:testing",
 };
 
+const JUSTVOXEL_REGISTRY_REPOSITORIES = {
+    hws: "home-server-project/justvoxel-hws",
+    vm: "home-server-project/justvoxel-vm",
+};
+
+const MANIFEST_ACCEPT = [
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+].join(", ");
+
 const getClient = () => {
     const client = PayloadsClient.instance?.client;
     if (!client) {
@@ -46,6 +58,68 @@ const findBootcSource = async (client) => {
     }
 
     throw new Error("Active Anaconda payload has no BOOTC source");
+};
+
+export const checkJustVoxelEditionAvailable = async (edition) => {
+    const repository = JUSTVOXEL_REGISTRY_REPOSITORIES[edition];
+    if (!repository) {
+        throw new Error("Unknown JustVoxel edition");
+    }
+
+    const tokenUrl = "https://ghcr.io/token?scope=" +
+        encodeURIComponent("repository:" + repository + ":pull");
+
+    let token;
+    try {
+        const tokenResponse = await cockpit.spawn([
+            "curl",
+            "--silent",
+            "--show-error",
+            "--fail",
+            "--connect-timeout", "5",
+            "--max-time", "10",
+            tokenUrl,
+        ], { err: "message" });
+        token = JSON.parse(tokenResponse).token;
+    } catch (error) {
+        throw new Error("Unable to get anonymous GHCR pull access for the selected image");
+    }
+
+    if (!token) {
+        throw new Error("Selected JustVoxel image is not available for anonymous pull");
+    }
+
+    let status;
+    try {
+        status = await cockpit.spawn([
+            "curl",
+            "--silent",
+            "--show-error",
+            "--output", "/dev/null",
+            "--write-out", "%{http_code}",
+            "--head",
+            "--connect-timeout", "5",
+            "--max-time", "10",
+            "--header", "Authorization: Bearer " + token,
+            "--header", "Accept: " + MANIFEST_ACCEPT,
+            "https://ghcr.io/v2/" + repository + "/manifests/testing",
+        ], { err: "message" });
+    } catch (error) {
+        throw new Error("Unable to reach the selected JustVoxel image on GHCR");
+    }
+
+    const httpStatus = status.trim();
+    if (httpStatus === "200") {
+        return true;
+    }
+    if (httpStatus === "401" || httpStatus === "403") {
+        throw new Error("Selected JustVoxel image is not public");
+    }
+    if (httpStatus === "404") {
+        throw new Error("Selected JustVoxel testing image was not found");
+    }
+
+    throw new Error("Selected JustVoxel image is unavailable on GHCR");
 };
 
 export const setJustVoxelEdition = async (edition) => {
