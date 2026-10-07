@@ -72,8 +72,8 @@ COPY --from=webui-builder /work/anaconda-webui/dist/ /usr/share/cockpit/anaconda
 # Presentation names belong only to this temporary Fedora installer image.
 # Preserve ID, VERSION_ID, and all other Fedora platform/profile fields.
 RUN sed -i \
-    -e 's/^NAME=.*/NAME="JustVoxel HWS"/' \
-    -e 's/^PRETTY_NAME=.*/PRETTY_NAME="JustVoxel HWS 10"/' \
+    -e 's/^NAME=.*/NAME="JustVoxel"/' \
+    -e 's/^PRETTY_NAME=.*/PRETTY_NAME="JustVoxel 10"/' \
     /usr/lib/os-release
 
 # image-builder expects EFI binaries here rather than in bootc's payload store.
