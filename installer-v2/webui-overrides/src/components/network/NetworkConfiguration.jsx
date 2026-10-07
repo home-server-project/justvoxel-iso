@@ -4,11 +4,10 @@
  */
 import cockpit from "cockpit";
 
-import React, { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert } from "@patternfly/react-core/dist/esm/components/Alert/index.js";
 import { Button } from "@patternfly/react-core/dist/esm/components/Button/index.js";
 
-import { PageContext } from "../../contexts/Common.jsx";
 import { useMaybeBackdrop } from "../../hooks/CockpitIntegration.jsx";
 
 import { useNetworkStatus } from "./useNetworkStatus.js";
@@ -76,8 +75,9 @@ export const CockpitNetworkIframe = ({
 
 export const NetworkConfiguration = ({
     onCritFail,
+    setIsFormDisabled,
+    setIsFormValid,
 }) => {
-    const { setIsFormDisabled, setIsFormValid } = useContext(PageContext) ?? {};
     const { hasActiveCheckpoint } = useNetworkStatus();
     const [registryStatus, setRegistryStatus] = useState("checking");
     const backdropClass = useMaybeBackdrop();
