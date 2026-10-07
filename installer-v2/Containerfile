@@ -33,6 +33,7 @@ RUN dnf install -y \
     anaconda-install-img-deps \
     anaconda-dracut \
     anaconda-webui \
+    cockpit-networkmanager \
     firefox \
     dbus-glib \
     dracut-config-generic \
