@@ -73,10 +73,10 @@ specifications with a fixed 512 MiB EFI system partition and a fixed 1 GiB ext4
 `/boot`. It fails the build if the expected upstream specifications change.
 `default_partitioning` remains root-only, avoiding duplicate boot partitions.
 Encryption is not enabled by default.
-The installer environment's NAME/PRETTY_NAME presentation fields supply product
-text while Fedora platform identity and the installed payload remain unchanged.
-Only the persistent wizard header overrides that product text with
-`JustVoxel 10 installation`; edition and review product information are unchanged.
+The installer environment uses edition-neutral JustVoxel presentation text while
+Fedora platform identity and the installed payload remain unchanged. The selected
+VM or HWS edition is shown by the edition page rather than hard-coded into the
+installer identity.
 
 `../branding.css` darkens only the header gradient behind the logo. The
 installer-only Plymouth script theme in `../plymouth/` centers the provided
