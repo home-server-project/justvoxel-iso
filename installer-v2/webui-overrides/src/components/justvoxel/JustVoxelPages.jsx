@@ -158,8 +158,8 @@ const JustVoxelEdition = ({ idPrefix, setIsFormDisabled, setIsFormValid }) => {
             </Form>
 
             {applying &&
-                <Alert isInline isPlain title={_("Applying edition selection")} variant="info">
-                    {_("Updating the JustVoxel installation and update source.")}
+                <Alert isInline isPlain title={_("Checking selected edition")} variant="info">
+                    {_("Verifying anonymous access to the selected JustVoxel image and updating the installation source.")}
                 </Alert>}
 
             {configuredRef &&
