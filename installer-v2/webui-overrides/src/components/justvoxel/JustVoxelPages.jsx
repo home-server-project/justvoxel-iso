@@ -14,7 +14,7 @@ import { Radio } from "@patternfly/react-core/dist/esm/components/Radio/index.js
 import { Title } from "@patternfly/react-core/dist/esm/components/Title/index.js";
 import { Stack } from "@patternfly/react-core/dist/esm/layouts/Stack/index.js";
 
-import { setJustVoxelEdition } from "../../apis/justvoxel-bootc.js";
+import { checkJustVoxelEditionAvailable, setJustVoxelEdition } from "../../apis/justvoxel-bootc.js";
 
 const _ = cockpit.gettext;
 
@@ -85,7 +85,8 @@ const JustVoxelEdition = ({ idPrefix, setIsFormDisabled, setIsFormValid }) => {
         setIsFormValid(false);
         setIsFormDisabled?.(true);
 
-        setJustVoxelEdition(edition)
+        checkJustVoxelEditionAvailable(edition)
+                .then(() => setJustVoxelEdition(edition))
                 .then(imageRef => {
                     if (!cancelled) {
                         window.sessionStorage.setItem(EDITION_STORAGE_KEY, edition);
@@ -167,7 +168,7 @@ const JustVoxelEdition = ({ idPrefix, setIsFormDisabled, setIsFormValid }) => {
                 </Alert>}
 
             {configurationError &&
-                <Alert isInline title={_("Unable to configure JustVoxel edition")} variant="danger">
+                <Alert isInline title={_("Selected JustVoxel edition is not available")} variant="danger">
                     {configurationError}
                     <div>
                         <Button isInline variant="link" onClick={() => setRetry(value => value + 1)}>
