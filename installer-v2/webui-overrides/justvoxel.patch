@@ -1,8 +1,9 @@
 --- a/src/components/steps.js
 +++ b/src/components/steps.js
-@@ -10,11 +10,10 @@
+@@ -10,11 +10,11 @@
  import { Page as PageProgress } from "./installation/index.js";
  import { Page as PageInstallationLanguage } from "./localization/index.js";
++import { Page as PageNetworkConfiguration } from "./network/index.js";
  import { Page as PageReviewConfiguration } from "./review/index.js";
 -import { Page as PageSoftwareSelection } from "./software/index.js";
 +import { EditionPage, LoginInformationPage } from "./justvoxel/JustVoxelPages.jsx";
@@ -13,9 +14,10 @@
 
  const _ = cockpit.gettext;
 
-@@ -24,7 +23,7 @@
+@@ -24,7 +24,8 @@
      const stepsOrder = [
          new PageInstallationLanguage(args),
++        new PageNetworkConfiguration(args),
          new PageDateAndTime(args),
 -        new PageSoftwareSelection(args),
 +        new EditionPage(args),
