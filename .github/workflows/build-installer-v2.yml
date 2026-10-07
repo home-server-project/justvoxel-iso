@@ -14,11 +14,11 @@ permissions:
 env:
   INSTALLER_IMAGE: localhost/justvoxel-installer-v2:testing
   IMAGE_BUILDER_IMAGE: ghcr.io/osbuild/image-builder:latest
-  ISO_BASENAME: JustVoxel-HWS-testing-x86_64
+  ISO_BASENAME: JustVoxel-testing-x86_64
 
 jobs:
   build-installer:
-    name: Build HWS testing online ISO
+    name: Build JustVoxel testing online ISO
     runs-on: ubuntu-24.04
     defaults:
       run:
