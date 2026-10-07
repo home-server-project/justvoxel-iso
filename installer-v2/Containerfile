@@ -37,6 +37,17 @@ RUN dnf install -y \
     dbus-glib \
     dracut-config-generic \
     dracut-network \
+    NetworkManager-wifi \
+    atheros-firmware \
+    brcmfmac-firmware \
+    iwlegacy-firmware \
+    iwlwifi-dvm-firmware \
+    iwlwifi-mvm-firmware \
+    mt7xxx-firmware \
+    nxpwireless-firmware \
+    realtek-firmware \
+    tiwilink-firmware \
+    curl \
     net-tools \
     grub2-common \
     grub2-pc-modules \
