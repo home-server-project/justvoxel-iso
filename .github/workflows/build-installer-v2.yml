@@ -1,6 +1,7 @@
 name: Build JustVoxel installer v2 online ISO
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - testing-v2
