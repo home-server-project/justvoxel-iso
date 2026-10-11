@@ -72,7 +72,7 @@ Automatic partitioning uses GPT and plain ext4 root, growing from 8 GiB without
 a maximum, with no separate home or disk swap. Anaconda/Blivet supplies the
 platform boot partitions. The installer-only build helper in
 `../anaconda-overrides/set-platform-defaults.py` replaces Anaconda's platform
-specifications with a fixed 512 MiB EFI system partition and a fixed 1 GiB ext4
+specifications with a fixed 128 MiB EFI system partition and a fixed 896 MiB ext4
 `/boot`. It fails the build if the expected upstream specifications change.
 `default_partitioning` remains root-only, avoiding duplicate boot partitions.
 Encryption is not enabled by default.
