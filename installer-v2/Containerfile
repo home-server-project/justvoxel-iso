@@ -93,6 +93,16 @@ COPY installer-v2/jv-inst-logo.png /usr/share/cockpit/branding/fedora/logo.png
 COPY installer-v2/.buildstamp /.buildstamp
 COPY installer-v2/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY installer-v2/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks
+
+# Source references require a transport prefix, but the installed bootc
+# tracking reference must be a normal registry image reference.
+RUN source_ref="$(awk '$1 == "bootc" {for (i=1; i<=NF; i++) if ($i == "--source-imgref") print $(i+1)}' /usr/share/anaconda/interactive-defaults.ks)" \
+    && target_ref="$(awk '$1 == "bootc" {for (i=1; i<=NF; i++) if ($i == "--target-imgref") print $(i+1)}' /usr/share/anaconda/interactive-defaults.ks)" \
+    && test -n "${source_ref}" \
+    && test -n "${target_ref}" \
+    && case "${source_ref}" in registry:*) ;; *) echo "ERROR: bootc source image is missing registry transport" >&2; exit 1 ;; esac \
+    && case "${target_ref}" in registry:*|*://*) echo "ERROR: bootc target image must not include a transport prefix: ${target_ref}" >&2; exit 1 ;; *) ;; esac
+
 COPY installer-v2/plymouth/ /usr/share/plymouth/themes/justvoxel/
 RUN plymouth-set-default-theme justvoxel
 
