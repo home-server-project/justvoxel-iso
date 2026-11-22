@@ -1,4 +1,4 @@
-#Migrated to https://github.com/home-server-project/justvoxel
+# Migrated to https://github.com/home-server-project/justvoxel
 
 ## JustVoxel ISO Builder
 
