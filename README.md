@@ -1,4 +1,6 @@
-# JustVoxel ISO Builder
+#Migrated to https://github.com/home-server-project/justvoxel
+
+## JustVoxel ISO Builder
 
 JustVoxel ISO Builder creates unattended installation media for [JustVoxel](https://github.com/home-server-project/justvoxel), the Home Server Project's immutable server appliance for running and managing a separate Minecraft server workload.
 
